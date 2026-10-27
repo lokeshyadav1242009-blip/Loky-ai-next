@@ -13,7 +13,8 @@ export class AppError extends Error {
     this.retryAfter = options.retryAfter ?? null;
     this.hint = options.hint ?? null;
     this.providerStatus = options.providerStatus ?? null;
-    this.retryable = options.retryable ?? status >= 500 || status === 429;
+    // Parentheses are required: `??` cannot be mixed with `||` unparenthesised.
+    this.retryable = options.retryable ?? (status >= 500 || status === 429);
   }
 
   toJSON() {
