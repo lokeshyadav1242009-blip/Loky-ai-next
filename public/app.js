@@ -429,6 +429,10 @@ function buildHero() {
         </linearGradient></defs>
       </svg>
     </div>
+    <div class="hero__brand">
+      <span class="hero__wordmark">LOKY AI</span>
+      <span class="hero__credit">Created by <strong>Lokesh Yadav</strong></span>
+    </div>
     <h1 class="hero__title">How can I help you today?</h1>
     <p class="hero__sub">
       LOKY AI Next streams answers in real time, understands Markdown and code, and keeps your
