@@ -15,7 +15,16 @@ browser — the frontend only talks to this app's own `/api/chat` endpoint.
 - **Markdown** — headings, lists, tables, links, inline code.
 - **Code blocks** — fenced code with a copy button on every block (and on every message).
 - **Chat history** — conversations are saved in `localStorage`; start a new chat at any time,
-  or revisit, export and delete previous ones.
+  or revisit, export and delete previous ones. Every entry shows a **title** and a
+  **relative timestamp** (plus an exact one on hover); rename a conversation inline with
+  the pencil button (Enter commits, Escape cancels).
+- **Owner branding** — the **LOKY AI** wordmark appears prominently in the welcome screen
+  and in an **About** dialog that credits *Created by Lokesh Yadav*. The dark theme is
+  unchanged.
+- **Opening animation** — a smooth ~2-second intro with the LOKY AI mark, a subtle glow and
+  the *Created by Lokesh Yadav* credit, fading straight into the chat screen. It plays
+  **only when the app opens** (never on new chat, conversation switch or message send) and
+  is skipped entirely for users who prefer reduced motion.
 - **Configurable provider** — switch between OpenAI, Groq, OpenRouter, Mistral, Together,
   DeepSeek, Google Gemini, a local Ollama server, or any OpenAI-compatible endpoint using
   environment variables only.
