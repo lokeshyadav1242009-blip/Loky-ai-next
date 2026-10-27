@@ -521,6 +521,7 @@ function renderMessages() {
   }
 
   el.messages.append(inner);
+  renderNotice();
   scrollToBottom(true);
 }
 
