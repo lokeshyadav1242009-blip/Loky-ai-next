@@ -73,6 +73,7 @@ const state = {
   abortController: null,
   health: null,
   bannerDismissedFor: null,
+  renamingId: null,
 };
 
 /* -------------------------------------------------------------------------- */
