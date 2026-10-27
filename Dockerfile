@@ -19,8 +19,12 @@ ENV NODE_ENV=production
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev --ignore-scripts && npm cache clean --force
 
-# Application code (node_modules, .env, tests excluded via .dockerignore).
-COPY . .
+# Copy only what the runtime needs. There is no .dockerignore support here, so
+# an explicit COPY list keeps the host's node_modules/.env/tests out of the
+# image instead of relying on ignore rules.
+COPY server ./server
+COPY public ./public
+COPY scripts ./scripts
 
 # Vendor marked + DOMPurify into public/vendor now that scripts/ exists.
 RUN node scripts/vendor-assets.js && test -s public/vendor/marked.esm.js
