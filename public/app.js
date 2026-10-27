@@ -982,11 +982,8 @@ async function requestReply(conversation) {
       content.append(retry);
     }
 
-    // The inline bubble carries the detail; the banner mirrors it for clarity.
-    showBanner(
-      { tone: 'error', text: errorTitle(info.code), hint: info.message },
-      { sticky: true },
-    );
+    // The failure is shown inline where the answer would be; the status dot
+    // in the top bar mirrors it for clarity.
     setStatus('error');
   } finally {
     state.abortController = null;
