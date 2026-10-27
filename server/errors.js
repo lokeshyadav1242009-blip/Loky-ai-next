@@ -92,7 +92,7 @@ export const errors = {
  * Convert an upstream HTTP failure into an AppError with a friendly message.
  * Exported for unit testing.
  */
-export function mapUpstreamError(status, body, config = {}) {
+export function mapUpstreamError(status, body, config = {}, retryAfterHeader = null) {
   const detail = extractDetail(body);
   const keyHint =
     status === 401 || status === 403
@@ -207,12 +207,31 @@ function clamp(text, max = 240) {
   return single.length > max ? `${single.slice(0, max - 1)}…` : single;
 }
 
-function extractRetryAfter(body) {
+/**
+ * Pull a retry delay out of an upstream rate-limit response.
+ *
+ * The hint lives in the JSON body for some providers and in the `Retry-After`
+ * header for OpenAI-compatible ones, so both are accepted. The header may be
+ * either a number of seconds or an HTTP date.
+ */
+function extractRetryAfter(body, retryAfterHeader = null) {
   const raw =
     body && typeof body === 'object'
       ? body.retry_after ?? body.retryAfter ?? body?.error?.retry_after
       : null;
   const parsed = Number.parseFloat(raw);
   if (Number.isFinite(parsed) && parsed > 0) return Math.ceil(parsed);
+
+  if (retryAfterHeader) {
+    const asSeconds = Number.parseFloat(retryAfterHeader);
+    if (Number.isFinite(asSeconds) && asSeconds > 0) return Math.ceil(asSeconds);
+
+    const asDate = Date.parse(retryAfterHeader);
+    if (Number.isFinite(asDate)) {
+      const seconds = Math.ceil((asDate - Date.now()) / 1000);
+      if (seconds > 0) return seconds;
+    }
+  }
+
   return null;
 }
