@@ -285,13 +285,73 @@ button {
   box-shadow: inset 0 0 0 1px rgba(139, 123, 255, 0.28);
 }
 .history__title {
+  display: block;
+  min-width: 0;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
 }
+.history__text {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.history__time {
+  font-size: 0.66rem;
+  line-height: 1.35;
+  color: var(--text-faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.history__item.is-active .history__time {
+  color: rgba(255, 255, 255, 0.6);
+}
 .history__icon {
   flex: 0 0 auto;
   color: var(--text-faint);
+}
+
+/* inline rename editor */
+.history__input {
+  width: 100%;
+  min-width: 0;
+  padding: 2px 6px;
+  border-radius: 7px;
+  background: var(--bg-elev-2);
+  border: 1px solid var(--accent);
+  color: var(--text);
+  font-size: 0.85rem;
+  line-height: 1.4;
+  outline: none;
+}
+.history__input:focus {
+  box-shadow: 0 0 0 3px rgba(139, 123, 255, 0.18);
+}
+.history__item.is-editing .history__btn {
+  cursor: default;
+}
+
+.history__rename {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  color: var(--text-faint);
+  opacity: 0;
+  transition: opacity 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+.history__item:hover .history__rename,
+.history__rename:focus-visible {
+  opacity: 1;
+}
+.history__rename:hover {
+  background: var(--surface-strong);
+  color: var(--text);
 }
 
 .history__del {
