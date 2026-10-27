@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>LOKY AI Next — AI assistant by Lokesh Yadav</title>
+    <meta
+      name="description"
+      content="LOKY AI Next is a fast, mobile-first AI assistant with streaming answers, Markdown and code support. Created by Lokesh Yadav."
+    />
+    <meta name="theme-color" content="#08090f" />
+    <meta name="color-scheme" content="dark" />
+    <meta property="og:title" content="LOKY AI Next" />
+    <meta
+      property="og:description"
+      content="A modern, mobile-first AI assistant with streaming answers and Markdown support. Created by Lokesh Yadav."
+    />
+    <meta property="og:type" content="website" />
+    <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="./favicon.svg" />
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#input">Skip to message box</a>
+
+    <div class="app">
+      <!-- ------------------------------- sidebar ------------------------------- -->
+      <aside class="sidebar" id="sidebar" aria-label="Conversations">
+        <div class="sidebar__top">
+          <div class="brand">
+            <span class="brand__mark" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none">
+                <path
+                  d="M12 2.5 4 7v10l8 4.5 8-4.5V7l-8-4.5Z"
+                  stroke="url(#g1)"
+                  stroke-width="1.6"
+                  stroke-linejoin="round"
+                />
+                <path
+                  d="M12 8.2v7.6M8.4 10.2v3.6M15.6 10.2v3.6"
+                  stroke="url(#g1)"
+                  stroke-width="1.6"
+                  stroke-linecap="round"
+                />
+                <defs>
+                  <linearGradient id="g1" x1="4" y1="3" x2="20" y2="21">
+                    <stop stop-color="#8b7bff" />
+                    <stop offset="1" stop-color="#22d3ee" />
+                  </linearGradient>
+                </defs>
+              </svg>
+            </span>
+            <span class="brand__text">
+              <strong>LOKY<span class="brand__accent"> AI</span> Next</strong>
+              <small>by Lokesh Yadav</small>
+            </span>
+          </div>
+          <button class="icon-btn only-mobile" id="closeSidebar" type="button" aria-label="Close menu">
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+              <path d="M6 6l12 12M18 6 6 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+            </svg>
+          </button>
+        </div>
+
+        <button class="btn btn--primary btn--block" id="newChat" type="button">
+          <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true">
+            <path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+          </svg>
+          New chat
+        </button>
+
+        <div class="sidebar__heading">
+          <h2>History</h2>
+          <div class="sidebar__heading-actions">
+            <button class="link-btn" id="exportAll" type="button" title="Download all conversations as Markdown">
+              Export
+            </button>
+            <button class="link-btn link-btn--danger" id="clearAll" type="button">Clear</button>
+          </div>
+        </div>
+
+        <nav class="history-wrap">
+          <ul class="history" id="historyList"></ul>
+          <p class="history__empty" id="historyEmpty">No conversations yet. Ask something to get started.</p>
+        </nav>
+
+        <div class="sidebar__foot">
+          <span class="chip" id="modelChip" title="Active AI model">Loading model…</span>
+          <span class="sidebar__note">History is stored in this browser only.</span>
+        </div>
+      </aside>
+
+      <div class="scrim" id="scrim" hidden></div>
+
+      <!-- --------------------------------- chat -------------------------------- -->
+      <main class="main">
+        <header class="topbar">
+          <button class="icon-btn only-mobile" id="openSidebar" type="button" aria-label="Open menu">
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+              <path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+            </svg>
+          </button>
+          <div class="topbar__title">
+            <span id="chatTitle">New chat</span>
+            <span class="topbar__badge" id="statusDot" aria-hidden="true"></span>
+          </div>
+          <button class="icon-btn" id="newChatTop" type="button" aria-label="Start a new chat" title="New chat">
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+              <path
+                d="M4 5h11a2 2 0 0 1 2 2v3M4 5v12a2 2 0 0 0 2 2h6m5.5-6.5a2.5 2.5 0 0 1 0 5H14m2.5-5h3"
+                stroke="currentColor"
+                stroke-width="1.6"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                fill="none"
+              />
+            </svg>
+          </button>
+        </header>
+
+        <section class="messages" id="messages" aria-live="polite" aria-relevant="additions text"></section>
+
+        <div class="composer-wrap">
+          <div class="banner" id="banner" hidden role="status">
+            <span class="banner__icon" aria-hidden="true">!</span>
+            <div class="banner__body">
+              <p class="banner__text" id="bannerText"></p>
+              <p class="banner__hint" id="bannerHint" hidden></p>
+            </div>
+            <button class="icon-btn icon-btn--sm" id="bannerClose" type="button" aria-label="Dismiss">
+              <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+                <path d="M6 6l12 12M18 6 6 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+              </svg>
+            </button>
+          </div>
+
+          <form class="composer" id="composer" autocomplete="off">
+            <label class="sr-only" for="input">Your message</label>
+            <textarea
+              id="input"
+              name="message"
+              rows="1"
+              placeholder="Ask anything…"
+              enterkeyhint="send"
+              spellcheck="true"
+              autocomplete="off"
+            ></textarea>
+            <button class="send" id="send" type="submit" aria-label="Send message">
+              <svg class="send__arrow" viewBox="0 0 24 24" width="19" height="19" aria-hidden="true">
+                <path
+                  d="M4.5 12h14m0 0-5.5-5.5M18.5 12 13 17.5"
+                  stroke="currentColor"
+                  stroke-width="1.9"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
+              </svg>
+              <svg class="send__stop" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+                <rect x="7" y="7" width="10" height="10" rx="2" fill="currentColor" />
+              </svg>
+            </button>
+          </form>
+
+          <p class="composer__hint">
+            <span class="kbd-hint">Enter</span> to send · <span class="kbd-hint">Shift</span> +
+            <span class="kbd-hint">Enter</span> for a new line ·
+            <button type="button" class="link-btn" id="stopBtn" hidden>Stop generating</button>
+          </p>
+        </div>
+      </main>
+    </div>
+
+    <template id="messageTemplate">
+      <article class="msg">
+        <div class="msg__avatar" aria-hidden="true"></div>
+        <div class="msg__body">
+          <div class="msg__meta">
+            <span class="msg__author"></span>
+            <button class="link-btn msg__copy" type="button">Copy</button>
+          </div>
+          <div class="msg__content"></div>
+        </div>
+      </article>
+    </template>
+
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>

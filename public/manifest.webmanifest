@@ -1,0 +1,17 @@
+{
+  "name": "LOKY AI Next",
+  "short_name": "LOKY AI",
+  "description": "A mobile-first AI assistant with streaming answers. Created by Lokesh Yadav.",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#08090f",
+  "theme_color": "#08090f",
+  "icons": [
+    {
+      "src": "./favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
