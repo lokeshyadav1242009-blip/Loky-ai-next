@@ -1165,11 +1165,6 @@ el.openSidebar.addEventListener('click', openSidebar);
 el.closeSidebar.addEventListener('click', closeSidebar);
 el.scrim.addEventListener('click', closeSidebar);
 
-el.bannerClose.addEventListener('click', () => {
-  state.bannerDismissedFor = el.bannerText.textContent;
-  hideBanner();
-});
-
 document.addEventListener('keydown', (event) => {
   if (event.key === 'Escape') {
     if (el.sidebar.classList.contains('is-open')) closeSidebar();
