@@ -280,18 +280,43 @@ function renderHistory() {
   for (const conversation of conversations) {
     const li = document.createElement('li');
     li.className = 'history__item';
+    li.dataset.id = conversation.id;
     if (conversation.id === state.activeId) li.classList.add('is-active');
 
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'history__btn';
-    btn.title = conversation.title;
+    btn.title = `${conversation.title} — ${formatTimestampLabel(conversation.updatedAt)}`;
     btn.innerHTML = `<svg class="history__icon" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M20 15.5A2.5 2.5 0 0 1 17.5 18H8l-4 3V6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v9Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>`;
-    const span = document.createElement('span');
-    span.className = 'history__title';
-    span.textContent = conversation.title;
-    btn.append(span);
+
+    const text = document.createElement('span');
+    text.className = 'history__text';
+
+    const title = document.createElement('span');
+    title.className = 'history__title';
+    title.textContent = conversation.title;
+
+    const time = document.createElement('span');
+    time.className = 'history__time';
+    time.textContent = formatRelativeTime(conversation.updatedAt);
+    const stamp = Number(conversation.updatedAt);
+    if (Number.isFinite(stamp) && stamp > 0) {
+      time.dateTime = new Date(stamp).toISOString();
+    }
+
+    text.append(title, time);
+    btn.append(text);
     btn.addEventListener('click', () => selectConversation(conversation.id));
+
+    const rename = document.createElement('button');
+    rename.type = 'button';
+    rename.className = 'history__rename';
+    rename.setAttribute('aria-label', `Rename "${conversation.title}"`);
+    rename.innerHTML = `<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M4.5 19.5h3.2L19 8.2a2.26 2.26 0 0 0-3.2-3.2L4.5 16.3v3.2Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>`;
+    rename.addEventListener('click', (event) => {
+      event.stopPropagation();
+      beginRename(conversation.id);
+    });
 
     const del = document.createElement('button');
     del.type = 'button';
@@ -303,8 +328,89 @@ function renderHistory() {
       deleteConversation(conversation.id);
     });
 
-    li.append(btn, del);
+    li.append(btn, rename, del);
     el.historyList.append(li);
+  }
+}
+
+/** Find a history row by conversation id without relying on CSS.escape. */
+function findHistoryItem(id) {
+  const rows = el.historyList.querySelectorAll('li[data-id]');
+  for (const row of rows) {
+    if (row.dataset.id === id) return row;
+  }
+  return null;
+}
+
+/**
+ * Turn a history row into an inline editor.
+ * Enter / blur commits, Escape cancels.
+ */
+function beginRename(id) {
+  if (state.renamingId) return;
+  const conversation = state.conversations.find((c) => c.id === id);
+  if (!conversation) return;
+
+  const row = findHistoryItem(id);
+  if (!row) return;
+  const textWrap = row.querySelector('.history__text');
+  if (!textWrap) return;
+
+  state.renamingId = id;
+
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.className = 'history__input';
+  input.value = conversation.title;
+  input.maxLength = 80;
+  input.setAttribute('aria-label', `Rename "${conversation.title}"`);
+
+  textWrap.replaceChildren(input);
+  row.classList.add('is-editing');
+
+  let settled = false;
+  const finish = (commit) => {
+    if (settled) return;
+    settled = true;
+    state.renamingId = null;
+
+    if (commit) {
+      const next = sanitizeTitle(input.value, conversation.title);
+      if (next !== conversation.title) {
+        conversation.title = next;
+        // Renaming deliberately leaves updatedAt alone so the list does not
+        // reorder while the user is editing it.
+        saveState();
+        if (conversation.id === state.activeId) el.chatTitle.textContent = next;
+      }
+    }
+
+    renderHistory();
+  };
+
+  input.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      finish(true);
+    } else if (event.key === 'Escape') {
+      event.preventDefault();
+      event.stopPropagation();
+      finish(false);
+    }
+  });
+  input.addEventListener('blur', () => finish(true));
+
+  input.focus();
+  input.select();
+}
+
+/** Update only the relative timestamps, leaving the DOM (and any rename) alone. */
+function refreshHistoryTimes() {
+  for (const row of el.historyList.querySelectorAll('li[data-id]')) {
+    const conversation = state.conversations.find((c) => c.id === row.dataset.id);
+    if (!conversation) continue;
+    const time = row.querySelector('.history__time');
+    if (time) time.textContent = formatRelativeTime(conversation.updatedAt);
   }
 }
 
