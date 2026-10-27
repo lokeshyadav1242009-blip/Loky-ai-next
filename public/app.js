@@ -634,12 +634,12 @@ async function checkHealth() {
       el.modelChip.textContent = `${data.provider} · ${data.model}`;
       el.modelChip.classList.remove('is-error');
       setStatus(state.streaming ? 'busy' : 'ready');
-      hideBanner();
+      hideNotice();
     } else {
       el.modelChip.textContent = 'AI not configured';
       el.modelChip.classList.add('is-error');
       setStatus('error');
-      showBanner(
+      showNotice(
         {
           tone: 'error',
           text: 'The AI service is not configured on this server yet.',
@@ -656,7 +656,7 @@ async function checkHealth() {
     el.modelChip.textContent = 'Offline';
     el.modelChip.classList.add('is-error');
     setStatus('error');
-    showBanner(
+    showNotice(
       {
         tone: 'error',
         text: 'Cannot reach the LOKY AI Next server.',
