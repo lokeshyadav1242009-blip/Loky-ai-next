@@ -1,0 +1,26 @@
+{
+  "name": "loky-ai-next",
+  "version": "1.0.0",
+  "private": true,
+  "description": "LOKY AI Next - a mobile-first AI assistant with a streaming chat UI and a configurable, server-side AI provider.",
+  "author": "Lokesh Yadav",
+  "license": "MIT",
+  "type": "module",
+  "main": "server/index.js",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js",
+    "vendor": "node scripts/vendor-assets.js",
+    "postinstall": "node scripts/vendor-assets.js",
+    "test": "node --test test/"
+  },
+  "dependencies": {
+    "dompurify": "^3.1.7",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.2",
+    "marked": "^14.1.4"
+  }
+}
