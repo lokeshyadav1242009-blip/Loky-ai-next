@@ -68,7 +68,8 @@ const state = {
   streaming: false,
   abortController: null,
   health: null,
-  bannerDismissedFor: null,
+  notice: null,
+  noticeDismissedFor: null,
   renamingId: null,
 };
 
