@@ -1259,3 +1259,6 @@ renderMessages();
 autoGrow();
 await checkHealth();
 el.input.focus();
+
+// Opening animation — app open only, never on new chat / conversation switch.
+playIntro();
