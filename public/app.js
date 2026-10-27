@@ -1126,6 +1126,41 @@ function closeSidebar() {
 }
 
 /* -------------------------------------------------------------------------- */
+/* Intro animation                                                            */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Plays the opening animation once, on app open only.
+ *
+ * - Skipped entirely when the user prefers reduced motion.
+ * - Never replays on new chat, on conversation switch, or on message send.
+ */
+function playIntro() {
+  const overlay = el.intro;
+  if (!overlay) return;
+
+  const prefersReducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+  if (prefersReducedMotion) {
+    overlay.remove();
+    return;
+  }
+
+  // Force a reflow so the entry animation always runs from its first frame.
+  void overlay.offsetWidth;
+  overlay.classList.add('intro--play');
+
+  const finish = () => {
+    overlay.classList.remove('intro--play');
+    overlay.remove();
+  };
+
+  // `animationend` covers the normal path; the timeout is a safety net in
+  // case the animation is skipped (e.g. tab hidden during boot).
+  overlay.addEventListener('animationend', finish, { once: true });
+  window.setTimeout(finish, 2600);
+}
+
+/* -------------------------------------------------------------------------- */
 /* Wiring                                                                     */
 /* -------------------------------------------------------------------------- */
 
