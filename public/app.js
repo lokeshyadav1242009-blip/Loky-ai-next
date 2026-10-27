@@ -1170,6 +1170,24 @@ el.openSidebar.addEventListener('click', openSidebar);
 el.closeSidebar.addEventListener('click', closeSidebar);
 el.scrim.addEventListener('click', closeSidebar);
 
+/* ---------------------------------- about --------------------------------- */
+
+function openAbout() {
+  el.aboutDialog.hidden = false;
+  el.aboutClose.focus();
+}
+
+function closeAbout() {
+  el.aboutDialog.hidden = true;
+  el.aboutBtn.focus();
+}
+
+el.aboutBtn.addEventListener('click', openAbout);
+el.aboutClose.addEventListener('click', closeAbout);
+el.aboutDialog.addEventListener('click', (event) => {
+  if (event.target === el.aboutDialog || event.target.id === 'aboutBackdrop') closeAbout();
+});
+
 document.addEventListener('keydown', (event) => {
   if (event.key === 'Escape') {
     if (el.sidebar.classList.contains('is-open')) closeSidebar();
