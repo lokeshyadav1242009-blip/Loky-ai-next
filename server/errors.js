@@ -106,7 +106,7 @@ export function mapUpstreamError(status, body, config = {}, retryAfterHeader = n
   }
 
   if (status === 429) {
-    const retryAfter = extractRetryAfter(body);
+    const retryAfter = extractRetryAfter(body, retryAfterHeader);
     return errors.upstreamRateLimited(
       retryAfter,
       `The AI provider is rate-limiting requests right now${
