@@ -198,7 +198,7 @@ test('POST /api/chat streams meta, deltas and done over SSE', async () => {
 });
 
 test('the stream is incremental, not one buffered blob', async () => {
-  const res = await chat(ask('count to three'));
+  const res = await chat(ask('SLOW count please'));
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
 
