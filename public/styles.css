@@ -525,7 +525,6 @@ button {
   background: radial-gradient(circle, rgba(139, 123, 255, 0.34) 0%, rgba(34, 211, 238, 0.12) 45%, transparent 70%);
   filter: blur(6px);
   opacity: 0;
-  animation: introGlow 2s ease forwards;
   pointer-events: none;
 }
 
@@ -539,7 +538,6 @@ button {
   background: linear-gradient(160deg, rgba(139, 123, 255, 0.24), rgba(34, 211, 238, 0.1));
   border: 1px solid var(--border-strong);
   opacity: 0;
-  animation: introMark 2s cubic-bezier(0.22, 0.9, 0.3, 1) forwards;
 }
 
 .intro__title {
@@ -553,7 +551,6 @@ button {
   background-clip: text;
   color: transparent;
   opacity: 0;
-  animation: introText 2s ease forwards;
 }
 
 .intro__title span {
@@ -567,7 +564,6 @@ button {
   text-transform: uppercase;
   color: var(--text-faint);
   opacity: 0;
-  animation: introText 2s ease 0.15s forwards;
 }
 
 .intro__bar {
@@ -579,7 +575,6 @@ button {
   border-radius: 2px;
   background: rgba(255, 255, 255, 0.07);
   opacity: 0;
-  animation: introText 2s ease 0.1s forwards;
 }
 
 .intro__bar span {
@@ -588,8 +583,15 @@ button {
   height: 100%;
   border-radius: 2px;
   background: var(--gradient);
-  animation: introBar 2s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  animation: none;
 }
+
+.intro--play .intro__glow { animation: introGlow 2s ease forwards; }
+.intro--play .intro__mark { animation: introMark 2s cubic-bezier(0.22, 0.9, 0.3, 1) forwards; }
+.intro--play .intro__title { animation: introText 2s ease forwards; }
+.intro--play .intro__sub { animation: introText 2s ease 0.15s forwards; }
+.intro--play .intro__bar { animation: introText 2s ease 0.1s forwards; }
+.intro--play .intro__bar span { animation: introBar 2s cubic-bezier(0.4, 0, 0.2, 1) forwards; }
 
 @keyframes introFade {
   0% { opacity: 0; }
