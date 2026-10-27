@@ -15,7 +15,8 @@
     "dev": "node --watch server/index.js",
     "vendor": "node scripts/vendor-assets.js",
     "postinstall": "node scripts/vendor-assets.js",
-    "test": "node --test test/"
+    "test": "node --test test/",
+    "smoke": "node scripts/runtime-smoke.js"
   },
   "dependencies": {
     "dompurify": "^3.1.7",
