@@ -533,20 +533,69 @@ function scrollToBottom(force = false) {
 }
 
 /* -------------------------------------------------------------------------- */
-/* Banner + toast                                                             */
+/* In-chat notice (used to be a banner box above the composer)                */
 /* -------------------------------------------------------------------------- */
 
-function showBanner({ tone = 'warn', text, hint = '' }, { sticky = false } = {}) {
-  if (!sticky && state.bannerDismissedFor === text) return;
-  el.banner.hidden = false;
-  el.banner.dataset.tone = tone;
-  el.bannerText.textContent = text;
-  el.bannerHint.hidden = !hint;
-  el.bannerHint.textContent = hint;
+/**
+ * Show a notice inside the conversation area (above the messages, below the
+ * top bar) so the composer area stays clean.
+ */
+function showNotice({ tone = 'warn', text, hint = '' }, { sticky = false } = {}) {
+  if (!sticky && state.noticeDismissedFor === text) return;
+  const same =
+    state.notice &&
+    state.notice.text === text &&
+    state.notice.hint === hint &&
+    state.notice.tone === tone;
+  state.notice = { tone, text, hint };
+  if (!same) renderNotice();
 }
 
-function hideBanner() {
-  el.banner.hidden = true;
+/** Remove the notice from the conversation area. */
+function hideNotice() {
+  state.notice = null;
+  renderNotice();
+}
+
+/** Render (or clear) the current notice inside the messages column. */
+function renderNotice() {
+  for (const node of el.messages.querySelectorAll('.notice')) node.remove();
+  if (!state.notice) return;
+
+  const inner = el.messages.querySelector('.messages__inner') ?? el.messages;
+  const notice = document.createElement('div');
+  notice.className = 'notice';
+  notice.dataset.tone = state.notice.tone;
+  notice.setAttribute('role', 'status');
+
+  const body = document.createElement('div');
+  body.className = 'notice__body';
+
+  const text = document.createElement('p');
+  text.className = 'notice__text';
+  text.textContent = state.notice.text;
+  body.append(text);
+
+  if (state.notice.hint) {
+    const hint = document.createElement('p');
+    hint.className = 'notice__hint';
+    hint.textContent = state.notice.hint;
+    body.append(hint);
+  }
+
+  const close = document.createElement('button');
+  close.type = 'button';
+  close.className = 'icon-btn icon-btn--sm notice__close';
+  close.setAttribute('aria-label', 'Dismiss');
+  close.innerHTML =
+    '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" /></svg>';
+  close.addEventListener('click', () => {
+    state.noticeDismissedFor = state.notice?.text ?? null;
+    hideNotice();
+  });
+
+  notice.append(body, close);
+  inner.prepend(notice);
 }
 
 let toastTimer = null;
