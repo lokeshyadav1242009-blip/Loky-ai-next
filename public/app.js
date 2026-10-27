@@ -206,19 +206,9 @@ function loadState() {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return;
     const parsed = JSON.parse(raw);
-    if (!parsed || !Array.isArray(parsed.conversations)) return;
-    state.conversations = parsed.conversations
-      .filter((c) => c && typeof c.id === 'string' && Array.isArray(c.messages))
-      .map((c) => ({
-        id: c.id,
-        title: typeof c.title === 'string' ? c.title : 'Untitled chat',
-        createdAt: Number(c.createdAt) || Date.now(),
-        updatedAt: Number(c.updatedAt) || Date.now(),
-        messages: c.messages
-          .filter((m) => m && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string')
-          .map((m) => ({ role: m.role, content: m.content, error: Boolean(m.error) })),
-      }));
-    state.activeId = parsed.activeId ?? null;
+    if (!parsed || typeof parsed !== 'object') return;
+    state.conversations = normalizeConversations(parsed.conversations);
+    state.activeId = typeof parsed.activeId === 'string' ? parsed.activeId : null;
   } catch {
     // Corrupt or unavailable storage: start clean rather than break the app.
     state.conversations = [];
@@ -231,18 +221,14 @@ function saveState() {
   clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
     try {
-      const payload = {
-        activeId: state.activeId,
-        conversations: state.conversations.slice(0, MAX_STORED_CONVERSATIONS),
-      };
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+      localStorage.setItem(STORAGE_KEY, serializeConversations(state.conversations, state.activeId));
     } catch {
       // Quota exceeded (very long history) - trim oldest and retry once.
       try {
         state.conversations = state.conversations.slice(0, 10);
         localStorage.setItem(
           STORAGE_KEY,
-          JSON.stringify({ activeId: state.activeId, conversations: state.conversations }),
+          serializeConversations(state.conversations, state.activeId),
         );
         toast('Storage was full — older chats were trimmed.');
       } catch {
