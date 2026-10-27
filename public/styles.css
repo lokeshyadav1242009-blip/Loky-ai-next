@@ -484,6 +484,162 @@ button {
   gap: 22px;
 }
 
+/* --------------------------------- intro -------------------------------- */
+/* Opening animation — plays once on app open (see app.js playIntro).      */
+/* The overlay covers the app while it animates, then fades out to reveal  */
+/* the chat screen.                                                          */
+
+.intro {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: grid;
+  place-items: center;
+  background: radial-gradient(circle at 50% 45%, #101322 0%, var(--bg) 62%);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.intro--play {
+  animation: introFade 2s ease forwards;
+  pointer-events: auto;
+}
+
+.intro__inner {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  text-align: center;
+}
+
+.intro__glow {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 260px;
+  height: 260px;
+  margin: -130px 0 0 -130px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(139, 123, 255, 0.34) 0%, rgba(34, 211, 238, 0.12) 45%, transparent 70%);
+  filter: blur(6px);
+  opacity: 0;
+  animation: introGlow 2s ease forwards;
+  pointer-events: none;
+}
+
+.intro__mark {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 96px;
+  height: 96px;
+  border-radius: 28px;
+  background: linear-gradient(160deg, rgba(139, 123, 255, 0.24), rgba(34, 211, 238, 0.1));
+  border: 1px solid var(--border-strong);
+  opacity: 0;
+  animation: introMark 2s cubic-bezier(0.22, 0.9, 0.3, 1) forwards;
+}
+
+.intro__title {
+  position: relative;
+  font-size: clamp(1.9rem, 8vw, 2.6rem);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  line-height: 1.1;
+  background: var(--gradient);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  opacity: 0;
+  animation: introText 2s ease forwards;
+}
+
+.intro__title span {
+  font-weight: 600;
+}
+
+.intro__sub {
+  position: relative;
+  font-size: 0.76rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  opacity: 0;
+  animation: introText 2s ease 0.15s forwards;
+}
+
+.intro__bar {
+  position: relative;
+  width: 132px;
+  height: 2px;
+  margin-top: 6px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.07);
+  opacity: 0;
+  animation: introText 2s ease 0.1s forwards;
+}
+
+.intro__bar span {
+  display: block;
+  width: 40%;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--gradient);
+  animation: introBar 2s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+@keyframes introFade {
+  0% { opacity: 0; }
+  12% { opacity: 1; }
+  72% { opacity: 1; }
+  100% { opacity: 0; visibility: hidden; }
+}
+
+@keyframes introGlow {
+  0% { opacity: 0; transform: scale(0.6); }
+  25% { opacity: 1; transform: scale(1); }
+  70% { opacity: 0.85; transform: scale(1.08); }
+  100% { opacity: 0; transform: scale(1.25); }
+}
+
+@keyframes introMark {
+  0% { opacity: 0; transform: translateY(12px) scale(0.86); }
+  22% { opacity: 1; transform: translateY(0) scale(1); }
+  75% { opacity: 1; transform: translateY(0) scale(1); }
+  100% { opacity: 0; transform: translateY(-6px) scale(0.97); }
+}
+
+@keyframes introText {
+  0% { opacity: 0; transform: translateY(8px); }
+  28% { opacity: 1; transform: translateY(0); }
+  78% { opacity: 1; transform: translateY(0); }
+  100% { opacity: 0; transform: translateY(-4px); }
+}
+
+@keyframes introBar {
+  0% { transform: translateX(-110%); }
+  55% { transform: translateX(140%); }
+  100% { transform: translateX(280%); }
+}
+
+/* Reduced motion: no intro at all. app.js also removes the overlay. */
+@media (prefers-reduced-motion: reduce) {
+  .intro {
+    display: none;
+  }
+  .intro__mark,
+  .intro__title,
+  .intro__sub,
+  .intro__bar,
+  .intro__glow {
+    animation: none !important;
+    opacity: 0;
+  }
+}
+
 /* --------------------------------- hero -------------------------------- */
 
 .hero {
