@@ -242,10 +242,6 @@ function saveState() {
 /* Conversation helpers                                                       */
 /* -------------------------------------------------------------------------- */
 
-function newId() {
-  return `c_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
-}
-
 function activeConversation() {
   return state.conversations.find((c) => c.id === state.activeId) ?? null;
 }
@@ -253,7 +249,7 @@ function activeConversation() {
 function createConversation() {
   const conversation = {
     id: newId(),
-    title: 'New chat',
+    title: DEFAULT_TITLE,
     createdAt: Date.now(),
     updatedAt: Date.now(),
     messages: [],
@@ -264,12 +260,6 @@ function createConversation() {
     state.conversations.length = MAX_STORED_CONVERSATIONS;
   }
   return conversation;
-}
-
-function titleFrom(text) {
-  const clean = text.replace(/\s+/g, ' ').trim();
-  if (!clean) return 'New chat';
-  return clean.length > 48 ? `${clean.slice(0, 47)}…` : clean;
 }
 
 function sortConversations() {
