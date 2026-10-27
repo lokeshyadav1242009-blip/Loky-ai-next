@@ -56,6 +56,10 @@ const el = {
   bannerClose: document.getElementById('bannerClose'),
   modelChip: document.getElementById('modelChip'),
   template: document.getElementById('messageTemplate'),
+  intro: document.getElementById('intro'),
+  aboutBtn: document.getElementById('aboutBtn'),
+  aboutDialog: document.getElementById('aboutDialog'),
+  aboutClose: document.getElementById('aboutClose'),
 };
 
 /* -------------------------------------------------------------------------- */
