@@ -286,7 +286,11 @@ try {
 
   const spa = await fetch(`${BASE}/some/deep/link`);
   const spaHtml = await spa.text();
-  check('unknown page falls back to index.html', spa.status === 200 && spaHtml.includes('<div id="app"') === false ? spaHtml.includes('<html') : spaHtml.includes('<html'));
+  check(
+    'unknown page falls back to the app shell',
+    spa.status === 200 && spaHtml.includes('<!DOCTYPE html') && spaHtml.includes('./app.js'),
+    `${spa.status}`,
+  );
 
   const unknownApi = await fetch(`${BASE}/api/nope`);
   check(
