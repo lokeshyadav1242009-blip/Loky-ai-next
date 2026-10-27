@@ -201,11 +201,14 @@ server/
 public/
   index.html      App shell
   styles.css      Dark, mobile-first styling
-  app.js          Streaming client, Markdown rendering, history, UI states
+  app.js          Streaming client, Markdown rendering, history, UI states, intro animation
+  chat-utils.js   DOM-free helpers: titles, timestamps, storage key, title sanitising
   vendor/         marked + DOMPurify (vendored at install time)
 scripts/
   vendor-assets.js  Copies browser libraries from node_modules into public/vendor
-test/               node:test suites
+test/
+  chat-utils.test.js    Unit tests for the history/timestamp helpers
+  client-assets.test.js Static checks that the UI features are wired up correctly
 ```
 
 ---
