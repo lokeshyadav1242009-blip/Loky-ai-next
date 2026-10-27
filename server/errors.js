@@ -182,8 +182,28 @@ export function extractDetail(body) {
   return '';
 }
 
+/**
+ * Token-shaped strings that must never reach the browser.
+ * Some providers echo the offending key back in their error message, and that
+ * message is forwarded to the client - so redact before it travels any further.
+ */
+const SECRET_PATTERNS = [
+  /\bsk-[A-Za-z0-9_-]{6,}/g,
+  /\bgsk_[A-Za-z0-9_-]{6,}/g,
+  /\bxai-[A-Za-z0-9_-]{6,}/g,
+  /\bAIza[A-Za-z0-9_-]{6,}/g,
+  /\b(?:tgp_v1|hf)_[A-Za-z0-9_-]{6,}/g,
+  /\bBearer\s+[A-Za-z0-9._-]{8,}/gi,
+];
+
+/** Remove anything that looks like an API key or bearer token. */
+export function redact(text) {
+  if (typeof text !== 'string') return '';
+  return SECRET_PATTERNS.reduce((acc, pattern) => acc.replace(pattern, '[api-key redacted]'), text);
+}
+
 function clamp(text, max = 240) {
-  const single = String(text).replace(/\s+/g, ' ').trim();
+  const single = redact(String(text).replace(/\s+/g, ' ').trim());
   return single.length > max ? `${single.slice(0, max - 1)}…` : single;
 }
 
