@@ -43,6 +43,10 @@
     "Liberation Mono", monospace;
 
   --safe-b: env(safe-area-inset-bottom, 0px);
+
+  /* App shell height. JS keeps this in sync with the visual viewport so the
+     composer stays visible when the Android keyboard opens. */
+  --app-h: 100vh;
 }
 
 *,
@@ -140,8 +144,10 @@ button {
   position: relative;
   z-index: 1;
   display: flex;
-  height: 100dvh;
-  min-height: 100dvh;
+  height: var(--app-h, 100vh);
+  min-height: 0;
+  overflow: hidden;
+  animation: fade 0.45s ease both;
 }
 
 /* -------------------------------- sidebar ------------------------------- */
@@ -411,7 +417,9 @@ button {
   flex-direction: column;
   flex: 1 1 auto;
   min-width: 0;
-  height: 100dvh;
+  min-height: 0;
+  height: auto;
+  overflow: hidden;
 }
 
 .topbar {
@@ -469,6 +477,7 @@ button {
 
 .messages {
   flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
   scroll-behavior: smooth;
@@ -502,7 +511,8 @@ button {
 
 .intro--play {
   animation: introFade 2s ease forwards;
-  pointer-events: auto;
+  /* the splash must never swallow taps */
+  pointer-events: none;
 }
 
 .intro__inner {
@@ -649,9 +659,17 @@ button {
   flex-direction: column;
   align-items: center;
   gap: 14px;
-  padding: clamp(18px, 6vh, 56px) 4px 8px;
+  padding: clamp(14px, 4vh, 44px) 4px 8px;
   text-align: center;
   animation: rise 0.4s ease both;
+}
+
+/* Compact brand lockup: logo beside the wordmark, credit as a subtitle. */
+.hero__lockup {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  text-align: left;
 }
 
 .hero__mark {
@@ -663,6 +681,8 @@ button {
   background: linear-gradient(160deg, rgba(139, 123, 255, 0.26), rgba(34, 211, 238, 0.12));
   border: 1px solid var(--border-strong);
   box-shadow: 0 18px 44px -22px rgba(139, 123, 255, 0.85);
+  animation: markIn 0.5s cubic-bezier(0.22, 0.9, 0.3, 1) both,
+    markGlow 3.6s ease-in-out 0.7s infinite;
 }
 
 .hero__title {
@@ -690,7 +710,7 @@ button {
 .hero__brand {
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: flex-start;
   gap: 3px;
 }
 .hero__wordmark {
@@ -753,7 +773,11 @@ button {
 .msg {
   display: flex;
   gap: 10px;
-  animation: rise 0.28s ease both;
+}
+
+/* Only freshly created messages animate - reopening history stays calm. */
+.msg--enter {
+  animation: rise 0.32s cubic-bezier(0.22, 0.9, 0.3, 1) both;
 }
 .msg--user {
   flex-direction: row-reverse;
@@ -1526,5 +1550,37 @@ button {
     overflow: visible;
     background: #fff;
     color: #111;
+  }
+}
+
+/* ============================ micro-interactions ======================= */
+
+/* Press feedback */
+.icon-btn:active,
+.btn:active:not(:disabled),
+.send:active:not(:disabled),
+.starter:active {
+  transform: scale(0.96);
+}
+
+/* Brand mark: scale-and-fade in, then a slow purple pulse */
+@keyframes markIn {
+  from {
+    opacity: 0;
+    transform: scale(0.86) translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes markGlow {
+  0%,
+  100% {
+    box-shadow: 0 18px 44px -22px rgba(139, 123, 255, 0.85), 0 0 0 0 rgba(139, 123, 255, 0);
+  }
+  50% {
+    box-shadow: 0 18px 44px -22px rgba(139, 123, 255, 0.85), 0 0 26px 2px rgba(139, 123, 255, 0.26);
   }
 }

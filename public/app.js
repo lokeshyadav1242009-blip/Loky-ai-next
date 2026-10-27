@@ -420,18 +420,20 @@ function buildHero() {
   const hero = document.createElement('div');
   hero.className = 'hero';
   hero.innerHTML = `
-    <div class="hero__mark" aria-hidden="true">
-      <svg viewBox="0 0 24 24" width="30" height="30" fill="none">
-        <path d="M12 2.5 4 7v10l8 4.5 8-4.5V7l-8-4.5Z" stroke="url(#hg)" stroke-width="1.5" stroke-linejoin="round" />
-        <path d="M12 8.2v7.6M8.4 10.2v3.6M15.6 10.2v3.6" stroke="url(#hg)" stroke-width="1.5" stroke-linecap="round" />
-        <defs><linearGradient id="hg" x1="4" y1="3" x2="20" y2="21">
-          <stop stop-color="#8b7bff" /><stop offset="1" stop-color="#22d3ee" />
-        </linearGradient></defs>
-      </svg>
-    </div>
-    <div class="hero__brand">
-      <span class="hero__wordmark">LOKY AI</span>
-      <span class="hero__credit">Created by <strong>Lokesh Yadav</strong></span>
+    <div class="hero__lockup">
+      <div class="hero__mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="30" height="30" fill="none">
+          <path d="M12 2.5 4 7v10l8 4.5 8-4.5V7l-8-4.5Z" stroke="url(#hg)" stroke-width="1.5" stroke-linejoin="round" />
+          <path d="M12 8.2v7.6M8.4 10.2v3.6M15.6 10.2v3.6" stroke="url(#hg)" stroke-width="1.5" stroke-linecap="round" />
+          <defs><linearGradient id="hg" x1="4" y1="3" x2="20" y2="21">
+            <stop stop-color="#8b7bff" /><stop offset="1" stop-color="#22d3ee" />
+          </linearGradient></defs>
+        </svg>
+      </div>
+      <div class="hero__brand">
+        <span class="hero__wordmark">LOKY AI</span>
+        <span class="hero__credit">Created by <strong>Lokesh Yadav</strong></span>
+      </div>
     </div>
     <h1 class="hero__title">How can I help you today?</h1>
     <p class="hero__sub">
@@ -505,7 +507,7 @@ function buildMessageElement(message, index) {
   return { article, content, body };
 }
 
-function renderMessages() {
+function renderMessages({ animateLastIndex = -1 } = {}) {
   el.messages.replaceChildren();
   const inner = document.createElement('div');
   inner.className = 'messages__inner';
@@ -520,6 +522,9 @@ function renderMessages() {
   } else {
     messages.forEach((message, index) => {
       const { article } = buildMessageElement(message, index);
+      // Only the message that just arrived animates in - replayed history
+      // must not re-run the entry animation.
+      if (index === animateLastIndex) article.classList.add('msg--enter');
       inner.append(article);
     });
   }
@@ -798,8 +803,14 @@ function buildPayloadMessages(conversation) {
     .map((m) => ({ role: m.role, content: m.content }));
 }
 
+/** Drop the typing indicator as soon as a reply settles (done or failed). */
+function clearTyping() {
+  document.querySelectorAll('#messages .typing').forEach((node) => node.remove());
+}
+
 function setStreamingUI(streaming) {
   state.streaming = streaming;
+  if (!streaming) clearTyping();
   els_setDisabled(streaming);
   el.send.classList.toggle('is-streaming', streaming);
   el.send.setAttribute('aria-label', streaming ? 'Stop generating' : 'Send message');
@@ -845,7 +856,7 @@ async function submit() {
   el.input.value = '';
   autoGrow();
   renderHistory();
-  renderMessages();
+  renderMessages({ animateLastIndex: conversation.messages.length - 1 });
   saveState();
 
   await requestReply(conversation);
@@ -859,7 +870,7 @@ async function requestReply(conversation) {
   const inner = el.messages.querySelector('.messages__inner') ?? el.messages;
   const placeholder = el.template.content.cloneNode(true);
   const article = placeholder.querySelector('.msg');
-  article.classList.add('msg--assistant');
+  article.classList.add('msg--assistant', 'msg--enter');
   article.querySelector('.msg__avatar').textContent = 'AI';
   article.querySelector('.msg__author').textContent = 'LOKY AI Next';
   const copyBtn = article.querySelector('.msg__copy');
@@ -879,9 +890,11 @@ async function requestReply(conversation) {
 
   let renderQueued = false;
   let latest = '';
+  let lastPainted = null;
 
   const paint = () => {
-    if (renderQueued) return;
+    if (renderQueued || latest === lastPainted) return;
+    lastPainted = latest;
     renderQueued = true;
     requestAnimationFrame(() => {
       renderQueued = false;
@@ -1240,9 +1253,33 @@ setInterval(() => {
   if (!state.streaming) checkHealth();
 }, HEALTH_REFRESH_MS);
 
+/* Safety net: the typing dots must never outlive the streaming state. */
+const typingGuard = new MutationObserver(() => {
+  if (!state.streaming || el.messages.querySelector('.msg--error')) clearTyping();
+});
+typingGuard.observe(el.messages, { childList: true, subtree: true, characterData: true });
+
 /* -------------------------------------------------------------------------- */
 /* Boot                                                                       */
 /* -------------------------------------------------------------------------- */
+
+/* Keep the shell in sync with the visual viewport so the composer stays above
+   the on-screen keyboard on Android. */
+function syncViewportHeight() {
+  const vv = window.visualViewport;
+  const height = vv ? vv.height : window.innerHeight;
+  document.documentElement.style.setProperty('--app-h', `${Math.round(height)}px`);
+  if (vv) window.scrollTo(0, 0);
+}
+syncViewportHeight();
+if (window.visualViewport) {
+  window.visualViewport.addEventListener('resize', syncViewportHeight);
+  window.visualViewport.addEventListener('scroll', syncViewportHeight);
+}
+window.addEventListener('resize', syncViewportHeight);
+window.addEventListener('orientationchange', () => {
+  window.setTimeout(syncViewportHeight, 150);
+});
 
 loadState();
 
@@ -1257,8 +1294,18 @@ if (!state.activeId && state.conversations.length > 0) {
 renderHistory();
 renderMessages();
 autoGrow();
-await checkHealth();
-el.input.focus();
 
 // Opening animation — app open only, never on new chat / conversation switch.
 playIntro();
+
+// Health is best-effort: a failing check must never block the chat UI.
+try {
+  await checkHealth();
+} catch {
+  /* the composer still works; request errors surface per message */
+}
+
+// Only grab focus where a physical keyboard is expected (never on mobile).
+if (window.matchMedia('(hover: hover) and (pointer: fine)').matches) {
+  el.input.focus();
+}
