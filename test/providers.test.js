@@ -29,7 +29,9 @@ const baseConfig = {
 /** Start a throwaway HTTP server that replies with `handler`, return its base URL. */
 async function withMockUpstream(handler, run) {
   const server = http.createServer(handler);
-  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  // Bind all interfaces on an ephemeral port (the deployed server does the
+  // same); the client below still connects over loopback.
+  await new Promise((resolve) => server.listen(0, '0.0.0.0', resolve));
   const { port } = server.address();
   try {
     return await run(`http://127.0.0.1:${port}/v1`);
