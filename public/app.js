@@ -820,18 +820,15 @@ async function submit() {
 
   const limit = state.health?.limits?.maxInputChars ?? 24000;
   if (text.length > limit) {
-    showBanner(
-      {
-        tone: 'error',
-        text: `That message is too long (${text.length.toLocaleString()} characters, limit ${limit.toLocaleString()}).`,
-        hint: 'Shorten your message, or split it into several questions.',
-      },
-      { sticky: true },
-    );
+    showNotice({
+      tone: 'error',
+      text: `That message is too long (${text.length.toLocaleString()} characters, limit ${limit.toLocaleString()}).`,
+      hint: 'Shorten your message, or split it into several questions.',
+    });
     return;
   }
 
-  hideBanner();
+  hideNotice();
 
   let conversation = activeConversation();
   if (!conversation) conversation = createConversation();
