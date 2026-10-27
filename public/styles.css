@@ -894,60 +894,48 @@ button {
   margin-inline: auto;
 }
 
-.banner {
+/* In-chat notice (replaces the old banner that sat above the composer) */
+.notice {
   display: flex;
   align-items: flex-start;
   gap: 10px;
-  margin-bottom: 9px;
+  margin: 0 0 14px;
   padding: 10px 12px;
   border-radius: var(--radius);
   background: var(--warn-soft);
   border: 1px solid rgba(255, 196, 107, 0.34);
   animation: rise 0.22s ease both;
 }
-.banner[data-tone="error"] {
+.notice[data-tone="error"] {
   background: var(--danger-soft);
   border-color: rgba(255, 107, 129, 0.36);
 }
-.banner__icon {
-  flex: 0 0 auto;
-  display: grid;
-  place-items: center;
-  width: 19px;
-  height: 19px;
-  margin-top: 1px;
-  border-radius: 50%;
-  font-size: 0.72rem;
-  font-weight: 700;
-  color: #1a1206;
-  background: var(--warn);
-}
-.banner[data-tone="error"] .banner__icon {
-  background: var(--danger);
-  color: #24060b;
-}
-.banner__body {
+.notice__body {
   flex: 1 1 auto;
   min-width: 0;
 }
-.banner__text {
+.notice__text {
   margin: 0;
   font-size: 0.82rem;
   line-height: 1.45;
   color: #ffe8c4;
 }
-.banner[data-tone="error"] .banner__text {
+.notice[data-tone="error"] .notice__text {
   color: #ffd9df;
 }
-.banner__hint {
+.notice__hint {
   margin: 4px 0 0;
   font-size: 0.76rem;
   line-height: 1.45;
   color: rgba(255, 232, 196, 0.72);
   overflow-wrap: anywhere;
 }
-.banner[data-tone="error"] .banner__hint {
+.notice[data-tone="error"] .notice__hint {
   color: rgba(255, 217, 223, 0.72);
+}
+.notice__close {
+  flex: 0 0 auto;
+  margin-top: -2px;
 }
 
 .composer {
