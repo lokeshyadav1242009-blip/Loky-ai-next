@@ -43,6 +43,25 @@ test('429 maps to a rate-limit error and preserves Retry-After', () => {
   assert.match(error.message, /gpt-4o-mini/);
 });
 
+test('429 also reads the Retry-After header when the body has no hint', () => {
+  // OpenAI-compatible providers put the delay in the header, not the JSON body.
+  const error = mapUpstreamError(
+    429,
+    { error: { message: 'Rate limit reached' } },
+    { model: 'gpt-4o-mini' },
+    '17',
+  );
+  assert.equal(error.code, 'upstream_rate_limited');
+  assert.equal(error.retryAfter, 17);
+});
+
+test('429 accepts an HTTP-date Retry-After header', () => {
+  const soon = new Date(Date.now() + 30_000).toUTCString();
+  const error = mapUpstreamError(429, null, {}, soon);
+  assert.equal(error.code, 'upstream_rate_limited');
+  assert.ok(error.retryAfter >= 25 && error.retryAfter <= 31, `got ${error.retryAfter}`);
+});
+
 test('404 names the model so misconfiguration is obvious', () => {
   const error = mapUpstreamError(404, null, { model: 'ghost-model' });
   assert.equal(error.code, 'upstream_error');
