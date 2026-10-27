@@ -146,6 +146,20 @@ mid-stream breaks, validation errors, security headers, static + SPA fallback).
 
 These tests need no API key and make no network calls.
 
+### Runtime smoke check
+
+```bash
+npm run smoke
+```
+
+Boots the **real** server entrypoint on port 80 against a mock OpenAI-compatible
+upstream and drives it over HTTP the way a browser would: health payload, static
+assets and vendored libraries, security headers, incremental SSE delivery
+(`meta` → `delta`… → `done`), a provider 429 becoming a safe `error` event with a
+retry hint, validation errors, and SPA fallback. Also needs no API key.
+
+Set `SMOKE_PORT` to check a different port.
+
 ---
 
 ## Deployment
