@@ -54,6 +54,26 @@ function upstreamHandler(req, res) {
       res.end('data: [DONE]\n\n');
       return;
     }
+    if (prompt.includes('SLOW')) {
+      // Real providers pause between tokens. Without a gap here the kernel
+      // coalesces every write into one TCP segment and "streaming" is
+      // indistinguishable from a buffered response.
+      res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache' });
+      const words = ['one', ' two', ' three', ' four', ' five'];
+      let i = 0;
+      const tick = () => {
+        if (i === words.length) {
+          res.write('data: [DONE]\n\n');
+          res.end();
+          return;
+        }
+        res.write(`data: ${JSON.stringify({ choices: [{ delta: { content: words[i] } }] })}\n\n`);
+        i += 1;
+        setTimeout(tick, 25);
+      };
+      tick();
+      return;
+    }
 
     // Happy path: markdown with a fenced code block, split across chunks.
     const chunks = ['Here is ', 'some **markdown**:\n\n', '```js\nconst a = 1;\n```\n'];
