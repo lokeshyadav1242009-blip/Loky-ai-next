@@ -24,6 +24,40 @@
   <body>
     <a class="skip-link" href="#input">Skip to message box</a>
 
+    <!-- ------------------------------ intro ------------------------------- -->
+    <!-- Plays once on app open (see app.js). Removed from the a11y tree and
+         hidden after the animation finishes. -->
+    <div class="intro" id="intro" aria-hidden="true">
+      <div class="intro__inner">
+        <div class="intro__glow" aria-hidden="true"></div>
+        <div class="intro__mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="52" height="52" fill="none">
+            <path
+              d="M12 2.5 4 7v10l8 4.5 8-4.5V7l-8-4.5Z"
+              stroke="url(#introGrad)"
+              stroke-width="1.5"
+              stroke-linejoin="round"
+            />
+            <path
+              d="M12 8.2v7.6M8.4 10.2v3.6M15.6 10.2v3.6"
+              stroke="url(#introGrad)"
+              stroke-width="1.5"
+              stroke-linecap="round"
+            />
+            <defs>
+              <linearGradient id="introGrad" x1="4" y1="3" x2="20" y2="21">
+                <stop stop-color="#8b7bff" />
+                <stop offset="1" stop-color="#22d3ee" />
+              </linearGradient>
+            </defs>
+          </svg>
+        </div>
+        <div class="intro__title">LOKY <span>AI</span></div>
+        <div class="intro__sub">Created by Lokesh Yadav</div>
+        <div class="intro__bar" aria-hidden="true"><span></span></div>
+      </div>
+    </div>
+
     <div class="app">
       <!-- ------------------------------- sidebar ------------------------------- -->
       <aside class="sidebar" id="sidebar" aria-label="Conversations">
