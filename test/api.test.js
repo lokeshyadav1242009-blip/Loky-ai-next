@@ -89,8 +89,13 @@ function upstreamHandler(req, res) {
   });
 }
 
+// Bind test servers on an ephemeral port, all interfaces (like production would),
+// while clients connect over loopback. Binding to loopback only would trip the
+// container bind check that guards against the localhost/502 deploy failure.
+const TEST_BIND_HOST = '0.0.0.0';
+
 const upstream = http.createServer(upstreamHandler);
-await new Promise((resolve) => upstream.listen(0, '127.0.0.1', resolve));
+await new Promise((resolve) => upstream.listen(0, TEST_BIND_HOST, resolve));
 const upstreamUrl = `http://127.0.0.1:${upstream.address().port}/v1`;
 
 /* --------------------------- app under test setup -------------------------- */
@@ -110,7 +115,7 @@ process.env.MAX_INPUT_CHARS = '2000';
 
 const { app } = await import('../server/index.js');
 
-const server = app.listen(0, '127.0.0.1');
+const server = app.listen(0, TEST_BIND_HOST);
 await new Promise((resolve) => server.once('listening', resolve));
 const baseUrl = `http://127.0.0.1:${server.address().port}`;
 
