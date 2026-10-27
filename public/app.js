@@ -12,10 +12,21 @@
  */
 
 import { marked } from './vendor/marked.esm.js';
+import {
+  DEFAULT_TITLE,
+  MAX_STORED_CONVERSATIONS,
+  STORAGE_KEY,
+  formatRelativeTime,
+  formatTimestampLabel,
+  newId,
+  normalizeConversations,
+  sanitizeTitle,
+  serializeConversations,
+  titleFrom,
+} from './chat-utils.js';
 
-const STORAGE_KEY = 'loky.ai.next.v1';
-const MAX_STORED_CONVERSATIONS = 50;
 const HEALTH_REFRESH_MS = 60000;
+const HISTORY_REFRESH_MS = 60000;
 
 /* -------------------------------------------------------------------------- */
 /* DOM references                                                             */
