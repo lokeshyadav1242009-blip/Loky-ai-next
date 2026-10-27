@@ -288,7 +288,7 @@ try {
   const spaHtml = await spa.text();
   check(
     'unknown page falls back to the app shell',
-    spa.status === 200 && spaHtml.includes('<!DOCTYPE html') && spaHtml.includes('./app.js'),
+    spa.status === 200 && /<!doctype html>/i.test(spaHtml) && spaHtml.includes('./app.js'),
     `${spa.status}`,
   );
 

@@ -195,7 +195,12 @@ export async function* streamChat(config, messages, options = {}) {
     clearTimeout(timeout);
     if (signal) signal.removeEventListener('abort', onAbort);
     const body = await safeJson(response);
-    throw mapUpstreamError(response.status, body, config);
+    throw mapUpstreamError(
+      response.status,
+      body,
+      config,
+      response.headers.get('retry-after'),
+    );
   }
 
   if (!response.body) {
