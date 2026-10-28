@@ -58,7 +58,57 @@
       </div>
     </div>
 
-    <div class="app">
+    <!-- ------------------------------ app nav ------------------------------ -->
+    <!-- Simple switch between the AI assistant and the Messages section. The
+         assistant stays mounted underneath, so nothing is ever lost when the
+         user switches back and forth. -->
+    <nav class="appnav" aria-label="Sections">
+      <span class="appnav__brand">
+        <span class="appnav__mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="19" height="19" fill="none">
+            <path
+              d="M12 2.5 4 7v10l8 4.5 8-4.5V7l-8-4.5Z"
+              stroke="url(#navG1)"
+              stroke-width="1.6"
+              stroke-linejoin="round"
+            />
+            <path d="M12 8.2v7.6M8.4 10.2v3.6M15.6 10.2v3.6" stroke="url(#navG1)" stroke-width="1.6" stroke-linecap="round" />
+            <defs>
+              <linearGradient id="navG1" x1="4" y1="3" x2="20" y2="21">
+                <stop stop-color="#8b7bff" />
+                <stop offset="1" stop-color="#22d3ee" />
+              </linearGradient>
+            </defs>
+          </svg>
+        </span>
+        <span class="appnav__name">LOKY AI</span>
+      </span>
+
+      <div class="appnav__switch" role="tablist" aria-label="Switch section">
+        <button
+          class="appnav__tab"
+          id="navAssistant"
+          type="button"
+          role="tab"
+          aria-selected="true"
+          aria-controls="appShell"
+        >
+          AI Assistant
+        </button>
+        <button
+          class="appnav__tab"
+          id="navMessages"
+          type="button"
+          role="tab"
+          aria-selected="false"
+          aria-controls="messenger"
+        >
+          Messages
+        </button>
+      </div>
+    </nav>
+
+    <div class="app" id="appShell">
       <!-- ------------------------------- sidebar ------------------------------- -->
       <aside class="sidebar" id="sidebar" aria-label="Conversations">
         <div class="sidebar__top">
