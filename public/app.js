@@ -1010,7 +1010,14 @@ async function requestReply(conversation) {
     // in the top bar mirrors it for clarity.
     setStatus('error');
   } finally {
-    state.abortController = null;
+  state.abortController = null;
+  setStreamingUI(false);
+
+  // Only autofocus on desktop, never on mobile.
+  if (window.matchMedia('(hover: hover) and (pointer: fine)').matches) {
+    el.input.focus();
+  }
+  }
     setStreamingUI(false);
     el.input.focus();
   }
