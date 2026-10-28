@@ -26,6 +26,7 @@ import {
 } from './chat-utils.js';
 import { initMessages, leaveMessages } from './messages.js';
 
+
 const HEALTH_REFRESH_MS = 60000;
 const HISTORY_REFRESH_MS = 60000;
 
