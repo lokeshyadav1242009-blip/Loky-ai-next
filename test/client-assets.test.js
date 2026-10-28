@@ -10,6 +10,8 @@ const pub = (name) => fs.readFileSync(path.join(root, 'public', name), 'utf8');
 const html = pub('index.html');
 const css = pub('styles.css');
 const js = pub('app.js');
+const messagesJs = pub('messages.js');
+const messagesUtils = pub('messages-utils.js');
 
 /* ------------------------------ chat history ----------------------------- */
 
