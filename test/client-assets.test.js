@@ -154,8 +154,9 @@ test('app.js wires the section switch without unmounting the assistant', () => {
 });
 
 test('the Messages client module is loaded as an ES module', () => {
-  assert.match(html, /src="\.\/messages\.js"/);
+  assert.match(html, /<script type="module" src="\.\/app\.js">/);
   assert.match(js, /from '\.\/messages\.js'/);
+  assert.match(js, /from '\.\/messages-utils\.js'/);
 });
 
 test('the chat list renders avatars, names, previews, timestamps and unread badges', () => {
