@@ -169,8 +169,8 @@ test('the chat list renders avatars, names, previews, timestamps and unread badg
 });
 
 test('sent and received bubbles are visually distinct', () => {
-  assert.match(messagesJs, /msg-bubble--out/);
-  assert.match(messagesJs, /msg-bubble--in/);
+  assert.match(messagesJs, /msg-bubble--\$\{/);
+  assert.match(messagesJs, /message\.direction === 'out' \? 'out' : 'in'/);
   assert.match(css, /\.msg-bubble--out/);
   assert.match(css, /\.msg-bubble--in/);
 });
