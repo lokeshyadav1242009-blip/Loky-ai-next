@@ -1223,6 +1223,37 @@ el.openSidebar.addEventListener('click', openSidebar);
 el.closeSidebar.addEventListener('click', closeSidebar);
 el.scrim.addEventListener('click', closeSidebar);
 
+/* ------------------------------- section switch --------------------------- */
+/* Two sections live in the same page: the AI assistant (default) and the
+   WhatsApp-style Messages list. The assistant shell is only hidden — never
+   unmounted — so an in-flight stream, the composer and the saved history all
+   survive a round trip between the two sections. */
+
+let activeSection = 'assistant';
+
+function setSection(section) {
+  const next = section === 'messages' ? 'messages' : 'assistant';
+  if (next === activeSection) return;
+
+  activeSection = next;
+  const showMessages = next === 'messages';
+
+  el.appShell.hidden = showMessages;
+  el.messenger.hidden = !showMessages;
+
+  el.navAssistant.setAttribute('aria-selected', String(!showMessages));
+  el.navMessages.setAttribute('aria-selected', String(showMessages));
+
+  if (showMessages) {
+    initMessages();
+  } else {
+    leaveMessages();
+  }
+}
+
+el.navAssistant.addEventListener('click', () => setSection('assistant'));
+el.navMessages.addEventListener('click', () => setSection('messages'));
+
 /* ---------------------------------- about --------------------------------- */
 
 function openAbout() {
