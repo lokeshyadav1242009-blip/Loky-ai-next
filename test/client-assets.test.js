@@ -231,7 +231,8 @@ test('the Messages styles are present and mobile-first', () => {
   assert.match(css, /\.msg-composer/);
   assert.match(css, /\.msg-avatar/);
   assert.match(css, /\.msg-emoji-panel/);
-  assert.match(css, /@media \(max-width: 899px\)/);
+  assert.match(css, /@media \(max-width: 900px\)/);
+  assert.match(css, /@media \(min-width: 901px\)/);
 });
 
 /* -------------------------------- security -------------------------------- */
