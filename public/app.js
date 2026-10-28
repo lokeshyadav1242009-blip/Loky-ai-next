@@ -57,6 +57,10 @@ const el = {
   aboutBtn: document.getElementById('aboutBtn'),
   aboutDialog: document.getElementById('aboutDialog'),
   aboutClose: document.getElementById('aboutClose'),
+  navAssistant: document.getElementById('navAssistant'),
+  navMessages: document.getElementById('navMessages'),
+  appShell: document.getElementById('appShell'),
+  messenger: document.getElementById('messenger'),
 };
 
 /* -------------------------------------------------------------------------- */
