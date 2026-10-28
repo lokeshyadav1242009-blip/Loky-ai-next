@@ -53,7 +53,7 @@ test('initials are derived from the contact name', () => {
 test('avatar colours are deterministic and come from the palette', () => {
   assert.equal(avatarColorFor('Aarav Mehta'), avatarColorFor('Aarav Mehta'));
   assert.ok(AVATAR_COLORS.includes(avatarColorFor('Aarav Mehta')));
-  assert.ok(AVATATAR_COLORS.includes(avatarColorFor('')));
+  assert.ok(AVATAR_COLORS.includes(avatarColorFor('')));
 });
 
 /* -------------------------------- threads --------------------------------- */
