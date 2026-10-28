@@ -153,6 +153,12 @@ button {
   animation: fade 0.45s ease both;
 }
 
+/* The assistant shell is hidden (not unmounted) while the Messages section is
+   open, so switching back keeps the live chat and its history intact. */
+.app[hidden] {
+  display: none;
+}
+
 /* -------------------------------- sidebar ------------------------------- */
 
 .sidebar {
