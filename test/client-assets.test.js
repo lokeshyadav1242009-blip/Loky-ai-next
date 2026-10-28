@@ -191,7 +191,8 @@ test('the Messages section supports search, new, rename and delete', () => {
 test('the empty state is rendered when there are no conversations', () => {
   assert.match(messagesJs, /function renderEmpty/);
   assert.match(messagesJs, /No conversations yet/);
-  assert.match(messagesJs, /msgEmpty\.hidden/);
+  assert.match(messagesJs, /el\.empty\.hidden = false/);
+  assert.match(messagesJs, /el\.empty\.hidden = true/);
 });
 
 test('demo conversations are labelled as samples, never as real chats', () => {
