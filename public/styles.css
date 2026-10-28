@@ -47,6 +47,9 @@
   /* App shell height. JS keeps this in sync with the visual viewport so the
      composer stays visible when the Android keyboard opens. */
   --app-h: 100vh;
+
+  /* Height of the top section switch (AI Assistant / Messages). */
+  --nav-h: 54px;
 }
 
 *,
