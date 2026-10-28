@@ -243,6 +243,185 @@
       </main>
     </div>
 
+    <!-- ----------------------------- messages ----------------------------- -->
+    <!-- Lightweight WhatsApp-style messenger living inside LOKY AI. Chats are
+         stored in this browser only (localStorage, separate key from the
+         assistant history). Demo conversations are flagged as samples. -->
+    <section class="messenger" id="messenger" hidden aria-label="Messages" data-view="list">
+      <div class="msg-shell">
+        <!-- ----------------------------- chat list ----------------------------- -->
+        <div class="msg-list-pane" id="msgListPane">
+          <header class="msg-list__top">
+            <span class="appnav__mark appnav__mark--sm" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="17" height="17" fill="none">
+                <path d="M12 2.5 4 7v10l8 4.5 8-4.5V7l-8-4.5Z" stroke="url(#navG2)" stroke-width="1.6" stroke-linejoin="round" />
+                <path d="M12 8.2v7.6M8.4 10.2v3.6M15.6 10.2v3.6" stroke="url(#navG2)" stroke-width="1.6" stroke-linecap="round" />
+                <defs>
+                  <linearGradient id="navG2" x1="4" y1="3" x2="20" y2="21">
+                    <stop stop-color="#8b7bff" />
+                    <stop offset="1" stop-color="#22d3ee" />
+                  </linearGradient>
+                </defs>
+              </svg>
+            </span>
+            <span class="msg-list__title">LOKY AI Messages</span>
+            <button class="msg-icon-btn" id="msgNew" type="button" aria-label="Start a new conversation" title="New conversation">
+              <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                <path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+              </svg>
+            </button>
+          </header>
+
+          <form class="msg-newrow" id="msgNewRow" hidden autocomplete="off">
+            <input
+              class="msg-newrow__input"
+              id="msgNewInput"
+              type="text"
+              maxlength="60"
+              placeholder="Contact or conversation name"
+              aria-label="Conversation name"
+            />
+            <button class="msg-newrow__go" type="submit">Start</button>
+            <button class="msg-icon-btn msg-icon-btn--sm" id="msgNewCancel" type="button" aria-label="Cancel">
+              <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true">
+                <path d="M6 6l12 12M18 6 6 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+              </svg>
+            </button>
+          </form>
+
+          <div class="msg-search">
+            <svg class="msg-search__icon" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+              <circle cx="11" cy="11" r="6.4" fill="none" stroke="currentColor" stroke-width="1.8" />
+              <path d="m15.8 15.8 4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+            </svg>
+            <input
+              class="msg-search__input"
+              id="msgSearch"
+              type="search"
+              placeholder="Search chats and contacts"
+              aria-label="Search chats and contacts"
+              autocomplete="off"
+            />
+            <button class="msg-search__clear" id="msgSearchClear" type="button" aria-label="Clear search" hidden>
+              <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+                <path d="M6 6l12 12M18 6 6 18" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" />
+              </svg>
+            </button>
+          </div>
+
+          <ul class="msg-list" id="msgList"></ul>
+
+          <div class="msg-empty" id="msgEmpty" hidden>
+            <span class="msg-empty__art" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="44" height="44" fill="none">
+                <path
+                  d="M20 15.5A2.5 2.5 0 0 1 17.5 18H8l-4 3V6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v9Z"
+                  stroke="currentColor"
+                  stroke-width="1.5"
+                  stroke-linejoin="round"
+                />
+                <path d="M8.5 9h7M8.5 12.5h4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+              </svg>
+            </span>
+            <h2 class="msg-empty__title" id="msgEmptyTitle">No conversations yet</h2>
+            <p class="msg-empty__text" id="msgEmptyText">
+              Start a conversation and it will show up here. Chats are stored on this device only.
+            </p>
+            <div class="msg-empty__actions" id="msgEmptyActions">
+              <button class="btn btn--primary" id="msgEmptyStart" type="button">New conversation</button>
+              <button class="btn" id="msgEmptySamples" type="button">Load demo samples</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ---------------------------- chat screen ---------------------------- -->
+        <div class="msg-thread" id="msgThread" aria-label="Conversation">
+          <header class="msg-thread__top">
+            <button class="msg-icon-btn msg-back" id="msgBack" type="button" aria-label="Back to chats">
+              <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                <path d="M14 6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+            </button>
+            <span class="msg-avatar msg-avatar--sm" id="msgThreadAvatar" aria-hidden="true">L</span>
+            <span class="msg-thread__meta">
+              <span class="msg-thread__name" id="msgThreadName">LOKY AI Messages</span>
+              <span class="msg-thread__sub" id="msgThreadSub">Pick a conversation to start reading</span>
+            </span>
+            <button class="msg-icon-btn" id="msgRename" type="button" aria-label="Rename conversation" title="Rename">
+              <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true">
+                <path d="M4.5 19.5h3.2L19 8.2a2.26 2.26 0 0 0-3.2-3.2L4.5 16.3v3.2Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" />
+              </svg>
+            </button>
+            <button class="msg-icon-btn" id="msgDelete" type="button" aria-label="Delete conversation" title="Delete">
+              <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true">
+                <path d="M6 7h12M9 7V5h6v2m-7 0 .7 12h6.6L16 7" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+            </button>
+          </header>
+
+          <p class="msg-thread__placeholder" id="msgThreadPlaceholder">
+            Select a conversation on the left to read and reply.
+          </p>
+
+          <div class="msg-thread__body" id="msgBody" aria-live="polite"></div>
+
+          <div class="msg-chip" id="msgChip" hidden>
+            <span class="msg-chip__name" id="msgChipName"></span>
+            <button class="msg-icon-btn msg-icon-btn--sm" id="msgChipRemove" type="button" aria-label="Remove attachment">
+              <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+                <path d="M6 6l12 12M18 6 6 18" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" />
+              </svg>
+            </button>
+          </div>
+
+          <form class="msg-composer" id="msgComposer" autocomplete="off">
+            <button class="msg-icon-btn" id="msgAttach" type="button" aria-label="Attach a file" title="Attach">
+              <svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true">
+                <path
+                  d="M17.5 11.5 12 17a3.5 3.5 0 0 1-5-5l6-6a2.5 2.5 0 0 1 3.5 3.5l-6 6a1.5 1.5 0 0 1-2-2l5-5"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
+              </svg>
+            </button>
+            <input
+              class="msg-composer__input"
+              id="msgInput"
+              type="text"
+              placeholder="Message"
+              aria-label="Message"
+              enterkeyhint="send"
+              autocomplete="off"
+            />
+            <button class="msg-icon-btn" id="msgEmoji" type="button" aria-label="Insert emoji" title="Emoji">
+              <svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true">
+                <circle cx="12" cy="12" r="8.2" fill="none" stroke="currentColor" stroke-width="1.7" />
+                <path d="M9 14.2c.8 1.1 1.8 1.6 3 1.6s2.2-.5 3-1.6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+                <path d="M9.2 9.6h.01M14.8 9.6h.01" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" />
+              </svg>
+            </button>
+            <button class="msg-icon-btn msg-send" id="msgSend" type="submit" aria-label="Send message">
+              <svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true">
+                <path
+                  d="M4.5 12h14m0 0-5.5-5.5M18.5 12 13 17.5"
+                  stroke="currentColor"
+                  stroke-width="1.9"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
+              </svg>
+            </button>
+            <input id="msgFile" type="file" hidden />
+          </form>
+
+          <div class="msg-emoji-panel" id="msgEmojiPanel" hidden role="group" aria-label="Emoji picker"></div>
+        </div>
+      </div>
+    </section>
+
     <!-- ------------------------------ about ------------------------------- -->
     <div class="about" id="aboutDialog" hidden>
       <div class="about__backdrop" id="aboutBackdrop"></div>
