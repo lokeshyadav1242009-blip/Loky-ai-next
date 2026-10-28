@@ -1685,10 +1685,6 @@ button {
   padding-top: var(--nav-h);
 }
 
-.sidebar {
-  inset: var(--nav-h) auto 0 0;
-}
-
 .scrim {
   inset: var(--nav-h) 0 0 0;
 }
