@@ -73,6 +73,32 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+/**
+ * Public browser bootstrap for Mini Chat.
+ *
+ * The Supabase client needs the project URL and a publishable (anon) key before
+ * it can sign a user in. Both are public by design: they ship to every browser
+ * and are protected by RLS, not by secrecy. This handler therefore returns ONLY
+ * those two values. The service-role key is never read into server/config.js at
+ * all, so it cannot leak here even by mistake - see loadSupabase().
+ */
+app.get('/api/supabase-config', (req, res) => {
+  // Per-deploy value; never let a proxy cache it.
+  res.setHeader('Cache-Control', 'no-store');
+  const { url, key, configured } = config.supabase;
+  if (!configured) {
+    return res.status(503).json({
+      error: {
+        code: 'supabase_not_configured',
+        message: 'Mini Chat is not configured on this server yet.',
+        hint: 'Set SUPABASE_URL and SUPABASE_ANON_KEY in the server environment, then restart.',
+        retryable: false,
+      },
+    });
+  }
+  return res.json({ url, anonKey: key, configured: true });
+});
+
 const limiter = createRateLimiter({
   max: config.limits.rateLimitMax,
   windowMs: config.limits.rateLimitWindowMs,
