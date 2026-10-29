@@ -32,7 +32,9 @@ app.use((req, res, next) => {
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data:",
       "font-src 'self' data:",
-      "connect-src 'self'",
+      // Mini Chat talks to Supabase Auth + PostgREST directly from the browser.
+      // One origin covers both; nothing else is opened up.
+      "connect-src 'self' https://jqnzfuimnkghwqccyosw.supabase.co",
       "base-uri 'none'",
       "form-action 'self'",
       "frame-ancestors 'self'",

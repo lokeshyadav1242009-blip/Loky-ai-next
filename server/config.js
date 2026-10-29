@@ -126,6 +126,42 @@ export function normaliseBaseUrl(raw) {
 }
 
 /**
+ * A Supabase publishable/anon key is the only key that may reach a browser.
+ * Refuse anything else, so a service-role or secret key can never be shipped
+ * to the client by a misconfigured environment.
+ */
+export function isPublishableKey(key) {
+  const value = str(key);
+  if (!value) return false;
+  // New-style keys (2024+) are opaque and self-describing.
+  if (value.startsWith('sb_publishable_')) return true;
+  // Legacy keys are JWTs; only role=anon is safe for public delivery.
+  const parts = value.split('.');
+  if (parts.length !== 3) return false;
+  try {
+    const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8'));
+    return payload?.role === 'anon';
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Mini Chat browser bootstrap. Fails closed: when the key is missing or is not
+ * a publishable key, `key` is emptied and `configured` is false, so the route
+ * 503s instead of handing out something dangerous.
+ *
+ * Only these two values are read. The service-role key is deliberately never
+ * referenced anywhere in this server.
+ */
+export function loadSupabase(env = process.env) {
+  const url = normaliseBaseUrl(env.SUPABASE_URL);
+  const key = str(env.SUPABASE_ANON_KEY);
+  const publishable = isPublishableKey(key);
+  return { url, key: publishable ? key : '', configured: Boolean(url) && publishable };
+}
+
+/**
  * Build the runtime configuration from an environment object.
  * Pure function so it can be unit tested with fake env values.
  */
@@ -159,6 +195,7 @@ export function loadConfig(env = process.env) {
     maxTokens: int(env.AI_MAX_TOKENS, 2048, 16, 32000),
     timeoutMs: int(env.AI_TIMEOUT_MS, 60000, 1000, 300000),
     keyUrl: preset.keyUrl,
+    supabase: loadSupabase(env),
     server: {
       port: int(env.PORT, 3000, 1, 65535),
       host: str(env.HOST, '0.0.0.0'),
