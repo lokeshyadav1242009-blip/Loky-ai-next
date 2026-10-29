@@ -1010,16 +1010,14 @@ async function requestReply(conversation) {
     // in the top bar mirrors it for clarity.
     setStatus('error');
   } finally {
-  state.abortController = null;
-  setStreamingUI(false);
-
-  // Only autofocus on desktop, never on mobile.
-  if (window.matchMedia('(hover: hover) and (pointer: fine)').matches) {
-    el.input.focus();
-  }
-  }
+    state.abortController = null;
     setStreamingUI(false);
-    el.input.focus();
+
+    // Desktop only: never steal focus after the answer finishes. On phones
+    // focusing here pops the soft keyboard back open, which is the bug.
+    if (window.matchMedia('(hover: hover) and (pointer: fine)').matches) {
+      el.input.focus();
+    }
   }
 }
 
