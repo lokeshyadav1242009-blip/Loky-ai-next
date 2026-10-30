@@ -70,9 +70,13 @@ try {
   const pageErrors = [];
   const consoleErrors = [];
   const authTokenRequests = [];
+  const failed5xx = [];
   page.on('pageerror', (error) => pageErrors.push(String(error)));
   page.on('console', (message) => {
     if (message.type() === 'error') consoleErrors.push(message.text());
+  });
+  page.on('response', (response) => {
+    if (response.status() >= 500) failed5xx.push(`${response.status()} ${response.url()}`);
   });
   page.on('request', (request) => {
     const url = request.url();
