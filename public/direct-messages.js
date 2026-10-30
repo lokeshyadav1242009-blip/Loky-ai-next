@@ -59,9 +59,12 @@ const el = {
   profileClose: null,
   profileAvatar: null,
   profileHandle: null,
+  profileMeta: null,
+  profileUsername: null,
   profileEmail: null,
   profileState: null,
   profileActions: null,
+  whoamiEmail: null,
 };
 
 const state = {
