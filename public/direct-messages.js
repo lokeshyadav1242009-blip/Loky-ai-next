@@ -515,13 +515,21 @@ async function submitSignIn() {
     await apiSignIn(email, password);
     if (el.password) el.password.value = '';
     await bootstrap({ force: true });
+    // An account confirmed on another device still gets its chosen username.
+    const applied = await applySignupIntent();
     setStatus(
       state.profile
         ? `Signed in as ${displayUsername(state.profile.username)}.`
-        : 'Signed in. Now pick a username.',
+        : applied
+          ? `Signed in as ${displayUsername(applied.username)}.`
+          : 'Signed in. Now pick a username.',
       'ok'
     );
   } catch (error) {
+    if (error instanceof SupabaseError && error.code === 'email_not_confirmed') {
+      setStatus(describeError(error), 'error');
+      return;
+    }
     // A throttled request must not be retried automatically: lock the buttons for
     // as long as Auth asked us to wait.
     if (error instanceof SupabaseError && error.status === 429) {
@@ -536,30 +544,77 @@ async function submitSignIn() {
   }
 }
 
+/**
+ * Two-step signup: the first tap reveals display name + username, the second
+ * creates the account with everything already validated.
+ */
 async function submitSignUp() {
-  const email = el.email?.value.trim() || '';
-  const password = el.password?.value || '';
-  if (!email || !password) {
-    setStatus('Enter an email and a password (at least 6 characters).', 'error');
+  if (!state.signupOpen) {
+    state.signupOpen = true;
+    if (el.signupFields) el.signupFields.hidden = false;
+    if (el.signupHelp) el.signupHelp.hidden = false;
+    setStatus(
+      'Add a display name (optional) and the username you want — then tap "Create account".',
+      'info'
+    );
+    el.displayName?.focus();
     return;
   }
 
+  const form = validateSignupForm({
+    displayName: el.displayName?.value || '',
+    username: el.usernameNew?.value || '',
+    email: el.email?.value || '',
+    password: el.password?.value || '',
+  });
+
+  if (!form.ok) {
+    const message =
+      form.errors.username || form.errors.email || form.errors.password || 'Check the form and try again.';
+    setStatus(message, 'error');
+    if (form.errors.username) el.usernameNew?.focus();
+    else if (form.errors.email) el.email?.focus();
+    else el.password?.focus();
+    return;
+  }
+
+  const { displayName, username, email, password } = form.value;
+  state.signupConflict = '';
   setBusy(true);
   setStatus('');
+
+  // Remember the username before the account exists: while confirmation is
+  // pending there is no session, so the profile cannot be created yet.
+  writeSignupIntent(createSignupIntent({ email, username, displayName }));
+
   try {
     const result = await apiSignUp(email, password);
+    if (el.password) el.password.value = '';
+
     if (result.needsEmailConfirmation) {
       setStatus(
-        'Account created. Open the confirmation link we emailed you, then sign in. ' +
-          'Signing in before confirming will not work.',
+        `Account created for ${email}. Confirm the link we emailed you — you'll be signed in automatically ` +
+          `and ${displayUsername(username)} is set up for you, no second sign-in or extra steps.`,
         'ok'
       );
-      if (el.password) el.password.value = '';
       return;
     }
-    if (el.password) el.password.value = '';
+
     await bootstrap({ force: true });
-    setStatus('Account created. Now pick your username.', 'ok');
+    const applied = await applySignupIntent();
+    const handle = state.profile?.username || applied?.username || '';
+    setStatus(
+      handle
+        ? `Welcome, ${displayUsername(handle)}. Your account is ready.`
+        : 'Account created. Now pick a username.',
+      state.signupConflict ? 'error' : 'ok'
+    );
+    if (state.signupConflict) setStatus(state.signupConflict, 'error');
+    if (handle) {
+      state.signupOpen = false;
+      if (el.signupFields) el.signupFields.hidden = true;
+      if (el.signupHelp) el.signupHelp.hidden = true;
+    }
   } catch (error) {
     if (error instanceof SupabaseError && error.status === 429) {
       state.authError = describeError(error);
@@ -568,6 +623,10 @@ async function submitSignUp() {
     }
     const hint = errorHint(error);
     setStatus(hint ? `${describeError(error)} ${hint}` : describeError(error), 'error');
+    if (error instanceof SupabaseError && error.code === 'email_taken') {
+      // The address already has an account: the intent is useless here.
+      clearSignupIntent();
+    }
   } finally {
     setBusy(false);
   }
