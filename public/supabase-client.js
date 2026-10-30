@@ -190,7 +190,7 @@ export function isSignedIn() {
 
 async function authRequest(path, body) {
   const config = await loadConfig();
-  const response = await fetch(`${config.url}/auth/v1/${path}`, {
+  const response = await fetchWithTimeout(`${config.url}/auth/v1/${path}`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -291,7 +291,7 @@ export async function signOut() {
   if (!session?.accessToken) return;
   try {
     const config = await loadConfig();
-    await fetch(`${config.url}/auth/v1/logout`, {
+    await fetchWithTimeout(`${config.url}/auth/v1/logout`, {
       method: 'POST',
       headers: { apikey: config.anonKey, Authorization: `Bearer ${session.accessToken}` },
     });
