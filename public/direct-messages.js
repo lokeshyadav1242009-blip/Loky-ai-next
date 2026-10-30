@@ -87,6 +87,15 @@ const state = {
 
 let hooks = { openRemoteThread: () => {}, rerender: () => {}, openMessages: () => {} };
 
+/**
+ * The profile check that is currently in flight, if any.
+ *
+ * Every entry point (page load, Messages opening, the dialog's "Try again" and
+ * the nav chip) funnels through `bootstrap()`, so this guard is what keeps a
+ * double tap from firing two profile requests at once.
+ */
+let profileRequest = null;
+
 /* -------------------------------- helpers -------------------------------- */
 
 function setStatus(message, kind = 'info') {
