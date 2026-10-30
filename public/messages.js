@@ -37,6 +37,16 @@ import {
   threadPreview,
 } from './messages-utils.js';
 import { formatRelativeTime, sanitizeTitle } from './chat-utils.js';
+import {
+  describeError,
+  initAccountUI,
+  isRemoteThread,
+  refreshAccount,
+  renderRemoteThread,
+  sendToRemoteThread,
+  startPolling,
+  stopRemotePolling,
+} from './direct-messages.js';
 
 const state = {
   threads: [],
