@@ -107,13 +107,15 @@ export async function loadConfig() {
   configPromise = (async () => {
     let response;
     try {
-      response = await fetch('/api/supabase-config', {
+      response = await fetchWithTimeout('/api/supabase-config', {
         headers: { Accept: 'application/json' },
         cache: 'no-store',
       });
-    } catch {
+    } catch (error) {
       configPromise = null;
-      throw new SupabaseError('network', 'Could not reach the server.');
+      throw error instanceof SupabaseError
+        ? error
+        : new SupabaseError('network', 'Could not reach the server.');
     }
 
     if (response.status === 503) {
