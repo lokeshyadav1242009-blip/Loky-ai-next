@@ -24,12 +24,26 @@ let configPromise = null;
 /* --------------------------------- errors --------------------------------- */
 
 export class SupabaseError extends Error {
-  constructor(code, message, status = 0) {
+  constructor(code, message, status = 0, retryAfter = 0) {
     super(message);
     this.name = 'SupabaseError';
     this.code = code;
     this.status = status;
+    /** Seconds the caller should wait before trying again (0 = unknown). */
+    this.retryAfter = retryAfter;
   }
+}
+
+/**
+ * How long Auth asked us to wait. GoTrue sends `Retry-After` on 429; when it is
+ * absent we fall back to a conservative default so the UI can still lock the
+ * buttons instead of letting the user hammer the endpoint.
+ */
+function retryAfterSeconds(response, fallback) {
+  const raw = response.headers?.get?.('retry-after');
+  const parsed = Number(raw);
+  if (Number.isFinite(parsed) && parsed > 0) return Math.min(Math.ceil(parsed), 3600);
+  return fallback;
 }
 
 /* -------------------------------- bootstrap ------------------------------- */
