@@ -1163,7 +1163,29 @@ export function initAccountUI(nextHooks = {}) {
   el.password?.addEventListener('keydown', (event) => {
     if (event.key === 'Enter') {
       event.preventDefault();
-      submitSignIn();
+      // Enter follows whichever action the form is currently showing.
+      if (state.signupOpen) submitSignUp();
+      else submitSignIn();
+    }
+  });
+
+  // Picking a username at signup uses exactly the rules the database enforces.
+  el.usernameNew?.addEventListener('input', () => {
+    if (!el.signupHelp) return;
+    const check = validateUsername(el.usernameNew.value);
+    if (!el.usernameNew.value.trim()) {
+      el.signupHelp.textContent = '3–20 letters, numbers or _ — this is how people find you.';
+      el.signupHelp.dataset.kind = '';
+      return;
+    }
+    el.signupHelp.textContent = check.ok ? `You will be reachable as ${displayUsername(check.value)}` : check.error;
+    el.signupHelp.dataset.kind = check.ok ? 'ok' : 'error';
+  });
+
+  el.usernameNew?.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      submitSignUp();
     }
   });
 
