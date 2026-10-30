@@ -297,7 +297,7 @@ function renderProfile() {
       profileActionButton(isCoolingDown() ? 'Please wait…' : 'Try again', {
         primary: true,
         onClick: () => {
-          if (!isCoolingDown()) refreshAccount();
+          if (!isCoolingDown()) bootstrap().catch(() => {});
         },
       })
     );
