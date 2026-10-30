@@ -487,7 +487,6 @@ export function initAccountUI(nextHooks = {}) {
   el.account = document.getElementById('dmAccount');
   if (!el.account) return;
 
-  el.configNote = document.getElementById('dmConfigNote');
   el.signedOut = document.getElementById('dmSignedOut');
   el.email = document.getElementById('dmEmail');
   el.password = document.getElementById('dmPassword');
