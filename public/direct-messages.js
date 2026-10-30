@@ -802,6 +802,7 @@ export function initAccountUI(nextHooks = {}) {
   el.signUpBtn = document.getElementById('dmSignUp');
   el.signedIn = document.getElementById('dmSignedIn');
   el.whoami = document.getElementById('dmWhoami');
+  el.whoamiEmail = document.getElementById('dmWhoamiEmail');
   el.signOutBtn = document.getElementById('dmSignOut');
   el.usernameForm = document.getElementById('dmUsernameForm');
   el.usernameInput = document.getElementById('dmUsername');
@@ -847,6 +848,64 @@ export function initAccountUI(nextHooks = {}) {
 
 /** Called by messages.js when the Messages section becomes visible. */
 export function refreshAccount() {
-  if (!state.ready) return;
+  if (!state.ready && !state.profileReady) return;
+  bootstrap().catch(() => {});
+}
+
+/* ------------------------- nav chip + profile dialog ---------------------- */
+
+function openProfile() {
+  if (!el.profileDialog) return;
+  el.profileDialog.hidden = false;
+  renderProfile();
+  el.profileClose?.focus();
+}
+
+function closeProfile() {
+  if (!el.profileDialog) return;
+  el.profileDialog.hidden = true;
+  el.navAccount?.focus();
+}
+
+/**
+ * Wire the always-visible account chip and its profile dialog.
+ *
+ * Called once from app.js at page load — that is what makes the signed-in state
+ * visible (and restored) without the user having to open Messages first.
+ */
+export function initProfileUI(nextHooks = {}) {
+  hooks = { ...hooks, ...nextHooks };
+
+  el.navAccount = document.getElementById('navAccount');
+  el.navAvatar = document.getElementById('navAvatar');
+  el.navAccountLabel = document.getElementById('navAccountLabel');
+  el.profileDialog = document.getElementById('profileDialog');
+  el.profileClose = document.getElementById('profileClose');
+  el.profileAvatar = document.getElementById('profileAvatar');
+  el.profileHandle = document.getElementById('profileHandle');
+  el.profileMeta = document.getElementById('profileMeta');
+  el.profileUsername = document.getElementById('profileUsername');
+  el.profileEmail = document.getElementById('profileEmail');
+  el.profileState = document.getElementById('profileState');
+  el.profileActions = document.getElementById('profileActions');
+
+  if (!el.navAccount) return;
+
+  if (!state.profileReady) {
+    state.profileReady = true;
+
+    el.navAccount.addEventListener('click', openProfile);
+    el.profileClose?.addEventListener('click', closeProfile);
+    el.profileDialog?.addEventListener('click', (event) => {
+      if (event.target === el.profileDialog || event.target.id === 'profileBackdrop') closeProfile();
+    });
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && el.profileDialog && !el.profileDialog.hidden) closeProfile();
+    });
+  }
+
+  // Paint the unknown state immediately, then validate any stored session.
+  renderChip();
+  renderProfile();
   bootstrap().catch(() => {});
 }
