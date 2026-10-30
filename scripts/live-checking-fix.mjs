@@ -94,6 +94,14 @@ try {
     await page.setRequestInterception(true);
     page.on('request', (request) => {
       if (request.url().includes('/rest/v1/profiles')) {
+        // The Supabase call carries an Authorization header, so the browser
+        // sends a CORS preflight first. Answer it with real CORS headers,
+        // otherwise Chrome blocks the mocked GET and the page sees a network
+        // error instead of the mocked row (a harness bug, not a product bug).
+        if (request.method() === 'OPTIONS') {
+          request.respond({ status: 204, headers: CORS_HEADERS, body: '' });
+          return;
+        }
         profileRequests.push(request.url());
         if (mode === 'stall') {
           held.push(request); // never answered: the request simply hangs
@@ -101,8 +109,7 @@ try {
         }
         request.respond({
           status: 200,
-          contentType: 'application/json',
-          headers: { 'content-type': 'application/json' },
+          headers: { ...CORS_HEADERS, 'content-type': 'application/json' },
           body: JSON.stringify([
             { id: USER_ID, username: USERNAME, display_name: null, avatar_seed: USERNAME },
           ]),
