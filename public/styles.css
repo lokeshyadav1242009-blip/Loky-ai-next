@@ -2375,3 +2375,180 @@ button {
     display: none !important;
   }
 }
+
+/* ------------------------- Mini Chat account / people ---------------------- */
+/* Additive only: the account panel sits above the chat search inside the
+   existing list pane and is hidden until it has something to say. */
+
+.dm-account {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px 0;
+}
+
+.dm-account__block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.dm-account__lead {
+  margin: 0;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: var(--text-dim);
+}
+
+.dm-account__fields {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.dm-account__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.dm-btn {
+  padding: 8px 14px;
+  font-size: 0.82rem;
+  border-radius: 999px;
+}
+
+.dm-account__who {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.dm-account__handle {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dm-account__username {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.dm-account__username .msg-newrow__input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.dm-help {
+  margin: 0;
+  font-size: 0.74rem;
+  line-height: 1.4;
+  color: var(--text-faint);
+}
+
+.dm-help[data-kind='ok'] {
+  color: var(--ok);
+}
+
+.dm-help[data-kind='error'] {
+  color: var(--danger);
+}
+
+.dm-status {
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: var(--text-dim);
+  overflow-wrap: anywhere;
+}
+
+.dm-status[data-kind='error'] {
+  color: var(--danger);
+}
+
+.dm-status[data-kind='ok'] {
+  color: var(--ok);
+}
+
+.dm-find {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 14px 0;
+}
+
+.dm-find__form {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.dm-find__form .msg-newrow__input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.dm-results {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dm-result {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+
+.dm-result__main {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.dm-result__name {
+  font-size: 0.86rem;
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dm-result__handle {
+  font-size: 0.75rem;
+  color: var(--text-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dm-result__action {
+  flex: 0 0 auto;
+}
+
+.dm-error {
+  color: var(--danger);
+}
+
+@media (max-width: 900px) {
+  .dm-account__username {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
