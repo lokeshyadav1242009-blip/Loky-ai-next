@@ -268,8 +268,8 @@ try {
     await page.click('#navMessages');
     await page.waitForSelector('#dmSignUp', { visible: true, timeout: 10000 });
 
-    const hiddenFirst = await page.$eval('#dmSignupFields', (n) => n.hidden);
-    check('signup extras stay hidden until asked for', hiddenFirst === true);
+    const hiddenFirst = await page.$eval('#dmSignupFields', (n) => n.hidden).catch(() => null);
+    check('signup extras stay hidden until asked for', hiddenFirst === true, `hidden=${hiddenFirst}`);
 
     await page.click('#dmSignUp');
     const revealed = await until(
