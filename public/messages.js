@@ -277,10 +277,21 @@ function renderThread() {
   if (el.threadSub) {
     el.threadSub.textContent = thread.demo
       ? 'Sample conversation · demo content'
-      : `${thread.messages.length} message${thread.messages.length === 1 ? '' : 's'} · on this device`;
+      : isRemoteThread(thread)
+        ? `Mini Chat · real chat${thread.remoteUsername ? ` · @${thread.remoteUsername}` : ''}`
+        : `${thread.messages.length} message${thread.messages.length === 1 ? '' : 's'} · on this device`;
   }
 
   if (!el.body) return;
+
+  // Server-backed conversation: direct-messages.js owns fetch + painting.
+  if (isRemoteThread(thread)) {
+    renderRemoteThread(thread, el.body);
+    startPolling(thread, el.body);
+    return;
+  }
+
+  stopRemotePolling();
   el.body.replaceChildren();
 
   if (!thread.messages.length) {
