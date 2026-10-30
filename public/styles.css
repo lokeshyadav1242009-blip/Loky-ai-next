@@ -2476,6 +2476,40 @@ button {
   color: var(--ok);
 }
 
+/* Signup extras (display name + username) revealed by "Create account". */
+.dm-account__fields--signup {
+  margin-top: 2px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--line);
+}
+
+/* Confirmation / auth result banner: visible from every section. */
+.auth-banner {
+  margin: 0;
+  padding: 10px 16px;
+  font-size: 0.84rem;
+  line-height: 1.45;
+  color: var(--text-dim);
+  background: var(--surface-2, rgba(255, 255, 255, 0.04));
+  border-bottom: 1px solid var(--line);
+  overflow-wrap: anywhere;
+}
+
+.auth-banner[data-kind='ok'] {
+  color: var(--ok);
+}
+
+.auth-banner[data-kind='error'] {
+  color: var(--danger);
+}
+
+@media (max-width: 640px) {
+  .auth-banner {
+    padding: 8px 12px;
+    font-size: 0.8rem;
+  }
+}
+
 .dm-find {
   display: flex;
   flex-direction: column;
