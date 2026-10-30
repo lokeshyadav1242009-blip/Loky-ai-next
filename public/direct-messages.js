@@ -641,6 +641,207 @@ async function doSignOut() {
   hooks.rerender();
 }
 
+/* ---------------------------- auth redirects ----------------------------- */
+
+/**
+ * Username + display name chosen before the account was confirmed.
+ *
+ * With email confirmation enabled Supabase returns no session at signup, so the
+ * profile row cannot be created yet (RLS requires an authenticated user). The
+ * intent is kept here — no password, no token — and applied automatically the
+ * first time that account has a session, so onboarding never re-asks.
+ */
+const SIGNUP_INTENT_KEY = 'loky.ai.next.signup.intent.v1';
+
+function readSignupIntent() {
+  try {
+    const raw = globalThis.localStorage?.getItem(SIGNUP_INTENT_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeSignupIntent(intent) {
+  try {
+    globalThis.localStorage?.setItem(SIGNUP_INTENT_KEY, JSON.stringify(intent));
+  } catch {
+    /* private mode: onboarding just asks again */
+  }
+}
+
+function clearSignupIntent() {
+  try {
+    globalThis.localStorage?.removeItem(SIGNUP_INTENT_KEY);
+  } catch {
+    /* nothing to clear */
+  }
+}
+
+/** Status line for the confirmation result, visible from every section. */
+function setBanner(message, kind = 'info') {
+  if (el.banner) {
+    el.banner.textContent = message || '';
+    el.banner.dataset.kind = kind;
+    el.banner.hidden = !message;
+  }
+  // The account panel shows the same message, so it is never only in one place.
+  setStatus(message, kind);
+}
+
+/** Remove Auth's parameters from the address bar without reloading the page. */
+function stripAuthParamsFromLocation(href) {
+  try {
+    const clean = stripAuthRedirect(href);
+    const target = clean || globalThis.location?.pathname || '/';
+    globalThis.history?.replaceState?.(null, '', target);
+  } catch {
+    /* history API unavailable: harmless, the token is still consumed once */
+  }
+}
+
+/**
+ * Create the profile from a stored signup intent, but only when the account has
+ * none. An existing username is never overwritten.
+ */
+async function applySignupIntent() {
+  const intent = readSignupIntent();
+  if (!intent || !state.user) return null;
+
+  // Already onboarded, or the intent belongs to a different account.
+  if (state.profile?.username) {
+    clearSignupIntent();
+    return null;
+  }
+  if (!isSignupIntentUsable(intent, state.user.email)) {
+    clearSignupIntent();
+    return null;
+  }
+
+  try {
+    const profile = await saveUsername(intent.username, intent.displayName);
+    state.profile = profile;
+    clearSignupIntent();
+    renderAccount();
+    return profile;
+  } catch (error) {
+    // A taken username must not trap the user in a retry loop: drop the intent
+    // and let the normal username form take over.
+    if (
+      error instanceof SupabaseError &&
+      (error.code === 'username_taken' || error.code === 'invalid_username')
+    ) {
+      clearSignupIntent();
+      state.usernameNotice = `${describeError(error)} Your email is confirmed — pick a different username below.`;
+      return null;
+    }
+    // Network/other failure: keep the intent so the next load finishes onboarding.
+    return null;
+  }
+}
+
+/**
+ * Handle a Supabase auth redirect (#access_token=…, ?token_hash=…, ?code=…,
+ * #error=…). Returns `{ handled, status }`; never throws.
+ *
+ * This runs once per page load, before any profile work, because the session has
+ * to exist before `/rest/v1/profiles` can be authorized.
+ */
+let authRedirectRun = null;
+
+export function handleAuthRedirect() {
+  if (!authRedirectRun) {
+    authRedirectRun = runAuthRedirect().catch((error) => {
+      setBanner(describeError(error), 'error');
+      return { handled: true, status: 'error' };
+    });
+  }
+  return authRedirectRun;
+}
+
+async function runAuthRedirect() {
+  const href = globalThis.location?.href || '';
+  const parsed = parseAuthRedirect(href);
+  if (parsed.action === 'none') return { handled: false, status: 'none' };
+
+  // Consume the URL before doing any network work: a reload must not replay a
+  // token that was just used, and the token should not stay in history.
+  stripAuthParamsFromLocation(href);
+
+  if (parsed.action === 'error') {
+    setBanner(describeAuthLinkError(parsed.error), 'error');
+    return { handled: true, status: 'error', code: parsed.error?.code || '' };
+  }
+
+  if (parsed.action === 'code') {
+    setBanner(
+      'That link was created by a different sign-in flow and cannot be completed here. ' +
+        'Sign in with your email and password — your address is already confirmed.',
+      'error'
+    );
+    return { handled: true, status: 'unsupported' };
+  }
+
+  setBanner('Confirming your email…', 'info');
+
+  try {
+    if (parsed.action === 'session') {
+      await establishSession(parsed.session);
+    } else {
+      await verifyTokenHash(parsed.tokenHash, parsed.type || 'signup');
+    }
+    state.user = currentUser();
+    return { handled: true, status: 'confirmed', type: parsed.type || 'signup' };
+  } catch (error) {
+    const expired =
+      error instanceof SupabaseError &&
+      (error.code === 'expired_link' || error.code === 'invalid_link' || error.status === 403);
+    setBanner(
+      expired ? describeAuthLinkError({ kind: 'expired' }) : describeError(error),
+      'error'
+    );
+    return { handled: true, status: 'error', code: expired ? 'expired_link' : 'other' };
+  }
+}
+
+/** Final banner once the session and profile are known after a confirmation. */
+async function finishAuthRedirect(result) {
+  const applied = await applySignupIntent();
+  const handle = state.profile?.username ? displayUsername(state.profile.username) : '';
+  const email = state.user?.email || 'your account';
+
+  if (handle) {
+    setBanner(`Email confirmed. You're signed in as ${handle}.`, 'ok');
+  } else if (applied) {
+    setBanner(`Email confirmed. You're signed in as ${displayUsername(applied.username)}.`, 'ok');
+  } else {
+    setBanner(
+      `Email confirmed. You're signed in as ${email}. Pick a username in Messages so people can find you.`,
+      'ok'
+    );
+  }
+  renderAccount();
+  renderProfile();
+  return result;
+}
+
+/**
+ * Page-startup auth work: consume any redirect, then validate the session.
+ * Shared, so the nav chip and the Messages panel never run it twice.
+ */
+let authStart = null;
+
+function startAuth() {
+  if (!authStart) {
+    authStart = (async () => {
+      const result = await handleAuthRedirect();
+      await bootstrap();
+      if (result.status === 'confirmed') await finishAuthRedirect(result);
+    })().catch(() => {});
+  }
+  return authStart;
+}
+
 /* --------------------------------- bootstrap ------------------------------ */
 
 /**
