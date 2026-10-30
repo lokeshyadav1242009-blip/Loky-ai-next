@@ -812,7 +812,9 @@ async function finishAuthRedirect(result) {
   const handle = state.profile?.username ? displayUsername(state.profile.username) : '';
   const email = state.user?.email || 'your account';
 
-  if (handle) {
+  if (state.signupConflict) {
+    setBanner(state.signupConflict, 'error');
+  } else if (handle) {
     setBanner(`Email confirmed. You're signed in as ${handle}.`, 'ok');
   } else if (applied) {
     setBanner(`Email confirmed. You're signed in as ${displayUsername(applied.username)}.`, 'ok');
