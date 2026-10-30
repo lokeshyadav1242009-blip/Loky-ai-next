@@ -179,6 +179,111 @@ function sessionFromTokenResponse(data) {
   };
 }
 
+/** Read a response body without ever throwing on an empty/invalid payload. */
+async function readJson(response) {
+  const text = await response.text();
+  if (!text) return null;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Turn the tokens from a confirmation link into a stored session.
+ *
+ * The implicit-flow redirect only carries `access_token` / `refresh_token`;
+ * there is no user object in the URL, so the user is fetched from
+ * `/auth/v1/user` before anything is written to storage. That is the step that
+ * used to be missing: without it a confirmed user looked signed out.
+ *
+ * Throws `expired_link` when Auth rejects the token (used, expired, revoked)
+ * and `network` when the request never completed.
+ */
+export async function establishSession({ accessToken, refreshToken = '', expiresIn = 3600 } = {}) {
+  if (!accessToken) {
+    throw new SupabaseError('invalid_link', 'That link is missing its sign-in token.');
+  }
+
+  const config = await loadConfig();
+  let response;
+  try {
+    response = await fetchWithTimeout(`${config.url}/auth/v1/user`, {
+      headers: {
+        apikey: config.anonKey,
+        Authorization: `Bearer ${accessToken}`,
+        Accept: 'application/json',
+      },
+    });
+  } catch (error) {
+    if (error instanceof SupabaseError) throw error;
+    throw new SupabaseError('network', 'Could not reach the server. Check your connection and open the link again.');
+  }
+
+  if (!response.ok) {
+    throw new SupabaseError(
+      'expired_link',
+      'That confirmation link has expired or was already used.',
+      response.status
+    );
+  }
+
+  const user = await readJson(response);
+  if (!user?.id) {
+    throw new SupabaseError('invalid_link', 'The server did not confirm that link. Please sign in.');
+  }
+
+  const seconds = Number(expiresIn) > 0 ? Number(expiresIn) : 3600;
+  const session = {
+    accessToken,
+    refreshToken: refreshToken || '',
+    expiresAt: Date.now() + seconds * 1000,
+    user: { id: user.id, email: user.email || '' },
+  };
+  writeSession(session);
+  return session;
+}
+
+/**
+ * Complete a confirmation link that carries `token_hash` + `type`.
+ * Auth answers with a normal token response, so the existing session shape is
+ * reused instead of inventing a second one.
+ */
+export async function verifyTokenHash(tokenHash, type = 'signup') {
+  if (!tokenHash) throw new SupabaseError('invalid_link', 'That link is missing its token.');
+
+  const config = await loadConfig();
+  let response;
+  try {
+    response = await fetchWithTimeout(`${config.url}/auth/v1/verify`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        apikey: config.anonKey,
+        Authorization: `Bearer ${config.anonKey}`,
+      },
+      body: JSON.stringify({ type, token_hash: tokenHash }),
+    });
+  } catch (error) {
+    if (error instanceof SupabaseError) throw error;
+    throw new SupabaseError('network', 'Could not reach the server. Check your connection and open the link again.');
+  }
+
+  const data = await readJson(response);
+  if (!response.ok) {
+    throw new SupabaseError(
+      'expired_link',
+      'That confirmation link has expired or was already used.',
+      response.status
+    );
+  }
+
+  const session = sessionFromTokenResponse(data);
+  writeSession(session);
+  return session;
+}
+
 /** Current signed-in user, or null. Never throws. */
 export function currentUser() {
   return readStoredSession()?.user || null;
