@@ -422,7 +422,11 @@ function deleteActiveThread() {
 
   const ok =
     typeof window.confirm === 'function'
-      ? window.confirm(`Delete “${thread.name}”? This cannot be undone.`)
+      ? window.confirm(
+          isRemoteThread(thread)
+            ? `Remove the chat with “${thread.name}” from this device? The other person keeps their copy.`
+            : `Delete “${thread.name}”? This cannot be undone.`
+        )
       : true;
   if (!ok) return;
 
@@ -430,6 +434,7 @@ function deleteActiveThread() {
   state.activeId = null;
   state.attachment = null;
   setView('list');
+  stopRemotePolling();
   save();
   render();
 }
