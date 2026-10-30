@@ -10,8 +10,13 @@
  *   message = { id, direction: 'in' | 'out', text, at, attachment }
  *
  * Persistence: localStorage on this device only, under a key that is separate
- * from the assistant history. No server, no database, no network calls — a
- * user's conversations are never shared with anyone else.
+ * from the assistant history.
+ *
+ * Real multi-user chat is opt-in and lives in direct-messages.js: a thread with
+ * a `remoteId` is backed by a Supabase conversation and rendered/sent through
+ * the hooks below. Everything network-related stays in that module, so local
+ * conversations keep working exactly as before and this file still makes no
+ * network calls of its own.
  */
 
 import {
