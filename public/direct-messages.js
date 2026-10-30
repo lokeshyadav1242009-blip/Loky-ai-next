@@ -494,7 +494,7 @@ async function submitSignIn() {
   try {
     await apiSignIn(email, password);
     if (el.password) el.password.value = '';
-    await bootstrap();
+    await bootstrap({ force: true });
     setStatus(
       state.profile
         ? `Signed in as ${displayUsername(state.profile.username)}.`
@@ -538,7 +538,7 @@ async function submitSignUp() {
       return;
     }
     if (el.password) el.password.value = '';
-    await bootstrap();
+    await bootstrap({ force: true });
     setStatus('Account created. Now pick your username.', 'ok');
   } catch (error) {
     if (error instanceof SupabaseError && error.status === 429) {
