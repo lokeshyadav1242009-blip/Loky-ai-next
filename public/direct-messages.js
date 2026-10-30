@@ -902,6 +902,14 @@ export function refreshAccount() {
 
 function openProfile() {
   if (!el.profileDialog) return;
+
+  // Opening the dialog is the user's chance to recover from a check that never
+  // finished (or never started). It only kicks a new request when nothing is in
+  // flight, so tapping twice cannot duplicate the profile request.
+  if (!profileRequest && (state.status === 'loading' || state.status === 'unknown')) {
+    bootstrap().catch(() => {});
+  }
+
   el.profileDialog.hidden = false;
   renderProfile();
   el.profileClose?.focus();
