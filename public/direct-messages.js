@@ -428,9 +428,10 @@ export async function renderRemoteThread(thread, container) {
     text.textContent = row.body;
     bubble.append(text);
 
-    const meta = document.createElement('span');
-    meta.className = 'msg-bubble__meta';
+    const meta = document.createElement('time');
+    meta.className = 'msg-bubble__time';
     meta.textContent = clockLabel(row.created_at);
+    meta.dateTime = new Date(row.created_at).toISOString();
     bubble.append(meta);
 
     container.append(bubble);
