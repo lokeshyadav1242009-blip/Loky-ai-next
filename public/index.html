@@ -106,6 +106,20 @@
           Messages
         </button>
       </div>
+
+      <!-- Always-visible account state: shows "Sign in" when signed out and the
+           real @username once the session is known. Opens the profile dialog. -->
+      <button
+        class="appnav__account"
+        id="navAccount"
+        type="button"
+        data-state="out"
+        aria-haspopup="dialog"
+        aria-label="Profile: checking your session"
+      >
+        <span class="appnav__avatar" id="navAvatar" aria-hidden="true">?</span>
+        <span class="appnav__account-label" id="navAccountLabel">Checking…</span>
+      </button>
     </nav>
 
     <div class="app" id="appShell">
@@ -307,6 +321,7 @@
                 <span class="dm-account__handle" id="dmWhoami"></span>
                 <button class="link-btn" id="dmSignOut" type="button">Sign out</button>
               </div>
+              <p class="dm-account__email" id="dmWhoamiEmail"></p>
               <form class="dm-account__username" id="dmUsernameForm" autocomplete="off">
                 <input
                   class="msg-newrow__input"
