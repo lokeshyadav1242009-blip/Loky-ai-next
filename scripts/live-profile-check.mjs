@@ -148,7 +148,10 @@ try {
   const userEmail = 'loky.tester@example.test';
 
   async function openSessionPage({ profiles, delayMs = 0 }) {
-    const sessionPage = await browser.newPage();
+    // Isolated context: a seeded session must not leak into the logged-out page
+    // (localStorage is shared per origin inside one browser context).
+    const context = await browser.createBrowserContext();
+    const sessionPage = await context.newPage();
     await sessionPage.setViewport({ width: 1280, height: 900 });
     await sessionPage.evaluateOnNewDocument(
       (key, session) => {
@@ -163,19 +166,33 @@ try {
       },
     );
 
-    const seen = { profiles: 0, tokenPosts: 0 };
+    const seen = { profiles: 0, preflights: 0, tokenPosts: 0 };
+    const corsHeaders = {
+      'access-control-allow-origin': '*',
+      'access-control-allow-headers': '*',
+      'access-control-allow-methods': 'GET,POST,PATCH,DELETE,OPTIONS',
+      'access-control-expose-headers': '*',
+    };
+
     await sessionPage.setRequestInterception(true);
     sessionPage.on('request', async (request) => {
       const url = request.url();
       if (/\/auth\/v1\/token/.test(url) && request.method() === 'POST') seen.tokenPosts += 1;
       if (url.includes('/rest/v1/profiles')) {
+        // The Supabase REST call carries an Authorization header, so the browser
+        // sends a preflight first; answer it or the fetch fails as a CORS error.
+        if (request.method() === 'OPTIONS') {
+          seen.preflights += 1;
+          request.respond({ status: 204, headers: corsHeaders }).catch(() => {});
+          return;
+        }
         seen.profiles += 1;
         if (delayMs) await new Promise((resolve) => setTimeout(resolve, delayMs));
         request
           .respond({
             status: profiles.status,
             contentType: 'application/json',
-            headers: { 'access-control-allow-origin': '*' },
+            headers: corsHeaders,
             body: JSON.stringify(profiles.body),
           })
           .catch(() => {});
@@ -183,7 +200,7 @@ try {
       }
       request.continue().catch(() => {});
     });
-    return { sessionPage, seen };
+    return { sessionPage, seen, context };
   }
 
   // 4a. Loading → signed in with a real username from the profiles table.
