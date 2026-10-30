@@ -434,13 +434,33 @@ function deleteActiveThread() {
   render();
 }
 
-function sendMessage() {
+async function sendMessage() {
   const thread = activeThread();
   if (!thread) return;
 
   const text = el.input ? el.input.value.trim().slice(0, MAX_MESSAGE_LENGTH) : '';
   const attachment = state.attachment;
   if (!text && !attachment) return;
+
+  // Real conversation: persist through direct-messages.js, then repaint.
+  if (isRemoteThread(thread)) {
+    if (!text) return; // attachments are a local-only convenience for now
+    const typed = el.input ? el.input.value : '';
+    if (el.input) el.input.value = '';
+    state.attachment = null;
+    renderAttachmentChip();
+    try {
+      await sendToRemoteThread(thread, text);
+      thread.updatedAt = Date.now();
+      save();
+      render();
+    } catch (error) {
+      if (el.input) el.input.value = typed; // never lose what was typed
+      if (el.threadSub) el.threadSub.textContent = describeError(error);
+    }
+    if (el.input) el.input.focus();
+    return;
+  }
 
   const now = Date.now();
   thread.messages.push({
