@@ -154,6 +154,12 @@ export function normalizeThreads(raw) {
       unread: Math.max(0, Math.min(999, Number(item.unread) || 0)),
       createdAt,
       updatedAt,
+      // A locally-written thread has no remoteId. Only a server-backed
+      // conversation carries one; anything else is treated as local.
+      remoteId: typeof item.remoteId === 'string' && item.remoteId ? item.remoteId : null,
+      remoteUserId: typeof item.remoteUserId === 'string' && item.remoteUserId ? item.remoteUserId : null,
+      remoteUsername:
+        typeof item.remoteUsername === 'string' && item.remoteUsername ? item.remoteUsername : null,
       messages,
     });
   }
