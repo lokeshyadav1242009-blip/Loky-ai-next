@@ -183,6 +183,10 @@ export function serializeThreads(threads, activeId = null) {
       unread: Number(t.unread) || 0,
       createdAt: t.createdAt,
       updatedAt: t.updatedAt,
+      // Only meaningful for server-backed conversations; null for local ones.
+      remoteId: t.remoteId || null,
+      remoteUserId: t.remoteUserId || null,
+      remoteUsername: t.remoteUsername || null,
       messages: (Array.isArray(t.messages) ? t.messages : [])
         .slice(-MAX_MESSAGES_PER_THREAD)
         .map((m) => ({
