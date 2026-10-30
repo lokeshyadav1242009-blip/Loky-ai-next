@@ -400,6 +400,45 @@ function startNewConversation(name) {
   if (el.input) el.input.focus();
 }
 
+/**
+ * Open (or create once) the local wrapper for a real Supabase conversation.
+ * Called by direct-messages.js after "Chat" is pressed on a search result.
+ */
+function openRemoteThread(conversationId, person) {
+  if (!conversationId) return;
+
+  let thread = state.threads.find((t) => t.remoteId === conversationId);
+  const now = Date.now();
+
+  if (!thread) {
+    const name =
+      (person && (person.display_name || (person.username ? `@${person.username}` : ''))) || 'Mini Chat';
+    thread = {
+      id: `remote_${conversationId}`,
+      name,
+      avatarSeed: (person && (person.avatar_seed || person.username)) || name,
+      demo: false,
+      unread: 0,
+      createdAt: now,
+      updatedAt: now,
+      messages: [],
+      remoteId: conversationId,
+      remoteUserId: (person && person.id) || null,
+      remoteUsername: (person && person.username) || null,
+    };
+    state.threads.unshift(thread);
+    save();
+  } else if (person && person.username && thread.remoteUsername !== person.username) {
+    thread.remoteUsername = person.username;
+    save();
+  }
+
+  state.activeId = thread.id;
+  setView('thread');
+  render();
+  if (el.input) el.input.focus();
+}
+
 function renameActiveThread(nextName) {
   const thread = activeThread();
   if (!thread) return;
