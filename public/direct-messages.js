@@ -486,9 +486,22 @@ async function submitSignIn() {
     await apiSignIn(email, password);
     if (el.password) el.password.value = '';
     await bootstrap();
-    setStatus(state.profile ? `Signed in as ${displayUsername(state.profile.username)}.` : 'Signed in. Now pick a username.', 'ok');
+    setStatus(
+      state.profile
+        ? `Signed in as ${displayUsername(state.profile.username)}.`
+        : 'Signed in. Now pick a username.',
+      'ok'
+    );
   } catch (error) {
-    setStatus(describeError(error), 'error');
+    // A throttled request must not be retried automatically: lock the buttons for
+    // as long as Auth asked us to wait.
+    if (error instanceof SupabaseError && error.status === 429) {
+      state.authError = describeError(error);
+      startCooldown(error.retryAfter || 60, state.authError);
+      return;
+    }
+    const hint = errorHint(error);
+    setStatus(hint ? `${describeError(error)} ${hint}` : describeError(error), 'error');
   } finally {
     setBusy(false);
   }
