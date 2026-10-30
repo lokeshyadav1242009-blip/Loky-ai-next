@@ -190,15 +190,24 @@ export function stripAuthRedirect(href) {
   const { base, query, hash } = splitUrl(href);
   const authKeys = new Set(AUTH_KEYS);
 
-  const cleanQuery = [...parseParams(query)]
-    .filter(([key]) => !authKeys.has(key))
-    .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
-    .join('&');
+  // A bare fragment/anchor (#chat, not #key=value) carries no parameters at all:
+  // keep it byte-for-byte so in-page navigation keeps working.
+  const queryIsParams = query.includes('=');
+  const hashIsParams = hash.includes('=');
 
-  const cleanHash = [...parseParams(hash)]
-    .filter(([key]) => !authKeys.has(key))
-    .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
-    .join('&');
+  const cleanQuery = !queryIsParams
+    ? query
+    : [...parseParams(query)]
+        .filter(([key]) => !authKeys.has(key))
+        .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
+        .join('&');
+
+  const cleanHash = !hashIsParams
+    ? hash
+    : [...parseParams(hash)]
+        .filter(([key]) => !authKeys.has(key))
+        .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
+        .join('&');
 
   return `${base}${cleanQuery ? `?${cleanQuery}` : ''}${cleanHash ? `#${cleanHash}` : ''}`;
 }
