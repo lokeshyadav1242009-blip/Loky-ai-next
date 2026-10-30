@@ -75,6 +75,12 @@ const el = {
   profileState: null,
   profileActions: null,
   whoamiEmail: null,
+  // Signup extras (display name + username) and the app-wide auth banner.
+  signupFields: null,
+  displayName: null,
+  usernameNew: null,
+  signupHelp: null,
+  banner: null,
 };
 
 const state = {
