@@ -402,6 +402,13 @@ function renderAccount() {
   if (el.find) el.find.hidden = !signedIn || !state.profile;
   if (el.signedIn) el.signedIn.hidden = !signedIn;
 
+  // Signed-in users never see the signup extras.
+  if (signedIn && state.signupOpen) {
+    state.signupOpen = false;
+    if (el.signupFields) el.signupFields.hidden = true;
+    if (el.signupHelp) el.signupHelp.hidden = true;
+  }
+
   if (!signedIn) {
     if (el.whoami) el.whoami.textContent = '';
     if (el.whoamiEmail) el.whoamiEmail.textContent = '';
