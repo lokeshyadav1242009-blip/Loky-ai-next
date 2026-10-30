@@ -272,6 +272,75 @@
             </button>
           </header>
 
+          <!-- --------------------------- account / people --------------------------- -->
+          <!-- Optional: sign in to chat with other LOKY AI users. Everything below
+               stays usable signed-out, and local conversations are unaffected. -->
+          <div class="dm-account" id="dmAccount">
+            <div class="dm-account__block" id="dmSignedOut" hidden>
+              <p class="dm-account__lead">Sign in to chat with other LOKY AI users.</p>
+              <div class="dm-account__fields">
+                <input
+                  class="msg-newrow__input"
+                  id="dmEmail"
+                  type="email"
+                  placeholder="you@example.com"
+                  aria-label="Email"
+                  autocomplete="email"
+                />
+                <input
+                  class="msg-newrow__input"
+                  id="dmPassword"
+                  type="password"
+                  placeholder="Password"
+                  aria-label="Password"
+                  autocomplete="current-password"
+                />
+              </div>
+              <div class="dm-account__actions">
+                <button class="btn btn--primary dm-btn" id="dmSignIn" type="button">Sign in</button>
+                <button class="btn dm-btn" id="dmSignUp" type="button">Create account</button>
+              </div>
+            </div>
+
+            <div class="dm-account__block" id="dmSignedIn" hidden>
+              <div class="dm-account__who">
+                <span class="dm-account__handle" id="dmWhoami"></span>
+                <button class="link-btn" id="dmSignOut" type="button">Sign out</button>
+              </div>
+              <form class="dm-account__username" id="dmUsernameForm" autocomplete="off">
+                <input
+                  class="msg-newrow__input"
+                  id="dmUsername"
+                  type="text"
+                  maxlength="20"
+                  placeholder="your_username"
+                  aria-label="Username"
+                />
+                <button class="btn btn--primary dm-btn" id="dmUsernameSave" type="submit">Create username</button>
+              </form>
+              <p class="dm-help" id="dmUsernameHelp">
+                Pick a username so people can find you. 3–20 letters, numbers or _
+              </p>
+            </div>
+
+            <p class="dm-status" id="dmStatus" role="status" hidden></p>
+          </div>
+
+          <div class="dm-find" id="dmFind" hidden>
+            <form class="dm-find__form" id="dmFindForm" autocomplete="off">
+              <input
+                class="msg-newrow__input"
+                id="dmUserSearch"
+                type="text"
+                maxlength="20"
+                placeholder="Find someone by username"
+                aria-label="Find someone by username"
+              />
+              <button class="msg-newrow__go" type="submit">Search</button>
+            </form>
+            <ul class="dm-results" id="dmResults" hidden></ul>
+          </div>
+
           <form class="msg-newrow" id="msgNewRow" hidden autocomplete="off">
             <input
               class="msg-newrow__input"
