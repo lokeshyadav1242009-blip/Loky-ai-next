@@ -743,6 +743,9 @@ export function initMessages() {
     wire();
   }
   render();
+  // Account panel + people search. Network work stays inside direct-messages.js.
+  initAccountUI({ openRemoteThread, rerender: render });
+  refreshAccount();
 }
 
 /**
@@ -750,4 +753,5 @@ export function initMessages() {
  */
 export function leaveMessages() {
   toggleEmojiPanel(false);
+  stopRemotePolling();
 }
