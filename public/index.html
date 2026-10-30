@@ -313,6 +313,34 @@
                   autocomplete="current-password"
                 />
               </div>
+              <!-- Revealed on the first tap of "Create account": the account is
+                   created with the profile already chosen, so onboarding never
+                   asks for the same information twice. -->
+              <div class="dm-account__fields dm-account__fields--signup" id="dmSignupFields" hidden>
+                <input
+                  class="msg-newrow__input"
+                  id="dmDisplayName"
+                  type="text"
+                  maxlength="60"
+                  placeholder="Display name (optional)"
+                  aria-label="Display name"
+                  autocomplete="name"
+                />
+                <input
+                  class="msg-newrow__input"
+                  id="dmUsernameNew"
+                  type="text"
+                  maxlength="20"
+                  placeholder="username"
+                  aria-label="Username"
+                  autocomplete="nickname"
+                  autocapitalize="none"
+                  spellcheck="false"
+                />
+              </div>
+              <p class="dm-help" id="dmSignupHelp" hidden>
+                3–20 letters, numbers or _ — this is how people find you.
+              </p>
               <div class="dm-account__actions">
                 <button class="btn btn--primary dm-btn" id="dmSignIn" type="button">Sign in</button>
                 <button class="btn dm-btn" id="dmSignUp" type="button">Create account</button>
