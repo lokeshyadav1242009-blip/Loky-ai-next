@@ -265,7 +265,7 @@ try {
   check('signed-in profile has no loading/error notice', signedIn.stateHidden, signedIn.stateText);
   check('signed-in profile offers Sign out', signedIn.actions.some((label) => /sign out/i.test(label)), signedIn.actions.join(', '));
   check('signed-in session fired no auth token request', loadingRun.seen.tokenPosts === 0, `posts=${loadingRun.seen.tokenPosts}`);
-  await loadingRun.sessionPage.close();
+  await loadingRun.context.close();
 
   // 4b. Signed in but no username row yet: offer setup, never invent a handle.
   const noNameRun = await openSessionPage({ profiles: { status: 200, body: [] } });
@@ -291,7 +291,7 @@ try {
   check('missing username hides the username/email rows', noName.metaHidden);
   check('missing username offers a setup path', noName.actions.some((label) => /choose a username/i.test(label)), noName.actions.join(', '));
   check('missing username explains the setup step', /choose a username/i.test(noName.stateText), noName.stateText);
-  await noNameRun.sessionPage.close();
+  await noNameRun.context.close();
 
   // 4c. Profile request fails: useful error, manual retry only, no retry storm.
   const errorRun = await openSessionPage({ profiles: { status: 500, body: { message: 'boom' } } });
@@ -314,7 +314,7 @@ try {
   check('profile error does not claim a username', !/loky_user1/.test(errored.handle), `handle="${errored.handle}"`);
   check('profile error offers a manual retry', errored.actions.some((label) => /try again/i.test(label)), errored.actions.join(', '));
   check('failed profile load is not retried automatically', errorRun.seen.profiles <= 1, `requests=${errorRun.seen.profiles}`);
-  await errorRun.sessionPage.close();
+  await errorRun.context.close();
 
   // 5. Reload restores the signed-out state instead of resetting to blank.
   await page.reload({ waitUntil: 'networkidle2', timeout: 45000 });
