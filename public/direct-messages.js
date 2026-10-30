@@ -732,7 +732,7 @@ async function applySignupIntent() {
       (error.code === 'username_taken' || error.code === 'invalid_username')
     ) {
       clearSignupIntent();
-      state.usernameNotice = `${describeError(error)} Your email is confirmed — pick a different username below.`;
+      state.signupConflict = `${describeError(error)} Your email is confirmed — pick a different username in Messages.`;
       return null;
     }
     // Network/other failure: keep the intent so the next load finishes onboarding.
