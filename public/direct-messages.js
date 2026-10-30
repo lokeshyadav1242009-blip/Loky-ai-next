@@ -98,6 +98,8 @@ const state = {
   busy: false,
   /** True once "Create account" has revealed the display name + username fields. */
   signupOpen: false,
+  /** Set when the username chosen at signup was taken after the email confirmed. */
+  signupConflict: '',
   pollTimer: null,
   pollThreadId: null,
   renderToken: 0,
