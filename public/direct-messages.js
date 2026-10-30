@@ -520,7 +520,11 @@ async function submitSignUp() {
   try {
     const result = await apiSignUp(email, password);
     if (result.needsEmailConfirmation) {
-      setStatus('Check your email to confirm the account, then sign in.', 'ok');
+      setStatus(
+        'Account created. Open the confirmation link we emailed you, then sign in. ' +
+          'Signing in before confirming will not work.',
+        'ok'
+      );
       if (el.password) el.password.value = '';
       return;
     }
@@ -528,7 +532,13 @@ async function submitSignUp() {
     await bootstrap();
     setStatus('Account created. Now pick your username.', 'ok');
   } catch (error) {
-    setStatus(describeError(error), 'error');
+    if (error instanceof SupabaseError && error.status === 429) {
+      state.authError = describeError(error);
+      startCooldown(error.retryAfter || 60, state.authError);
+      return;
+    }
+    const hint = errorHint(error);
+    setStatus(hint ? `${describeError(error)} ${hint}` : describeError(error), 'error');
   } finally {
     setBusy(false);
   }
