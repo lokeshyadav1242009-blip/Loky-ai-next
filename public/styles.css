@@ -2460,7 +2460,7 @@ button {
   color: var(--danger);
 }
 
-.dm-status {
+.dm-notice {
   margin: 0;
   font-size: 0.78rem;
   line-height: 1.45;
@@ -2468,11 +2468,11 @@ button {
   overflow-wrap: anywhere;
 }
 
-.dm-status[data-kind='error'] {
+.dm-notice[data-kind='error'] {
   color: var(--danger);
 }
 
-.dm-status[data-kind='ok'] {
+.dm-notice[data-kind='ok'] {
   color: var(--ok);
 }
 

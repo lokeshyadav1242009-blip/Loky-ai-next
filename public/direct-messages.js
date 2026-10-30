@@ -50,7 +50,7 @@ const el = {
   find: null,
   searchInput: null,
   results: null,
-  status: null,
+  notice: null,
 };
 
 const state = {
@@ -69,10 +69,10 @@ let hooks = { openRemoteThread: () => {}, rerender: () => {} };
 /* -------------------------------- helpers -------------------------------- */
 
 function setStatus(message, kind = 'info') {
-  if (!el.status) return;
-  el.status.textContent = message || '';
-  el.status.dataset.kind = kind;
-  el.status.hidden = !message;
+  if (!el.notice) return;
+  el.notice.textContent = message || '';
+  el.notice.dataset.kind = kind;
+  el.notice.hidden = !message;
 }
 
 function setBusy(busy) {
@@ -502,7 +502,7 @@ export function initAccountUI(nextHooks = {}) {
   el.find = document.getElementById('dmFind');
   el.searchInput = document.getElementById('dmUserSearch');
   el.results = document.getElementById('dmResults');
-  el.status = document.getElementById('dmStatus');
+  el.notice = document.getElementById('dmNotice');
 
   if (state.ready) return;
   state.ready = true;
