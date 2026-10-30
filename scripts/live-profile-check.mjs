@@ -135,43 +135,165 @@ try {
   // 3. Logged out must not fire password grants (that is what trips the 429).
   check('no auth token POST while logged out', authTokenRequests.length === 0, authTokenRequests.slice(0, 2).join(' | '));
 
-  // 4. Loading branch: delay the config request and observe "Checking…".
-  const loadingPage = await browser.newPage();
-  await loadingPage.setViewport({ width: 1280, height: 900 });
-  await loadingPage.setRequestInterception(true);
-  loadingPage.on('request', async (request) => {
-    if (request.url().includes('/api/supabase-config')) {
-      await new Promise((resolve) => setTimeout(resolve, 1200));
+  // 4. Signed-in states. A stored session is seeded and the profiles request is
+  // answered by the page's own request interception: this exercises the real UI
+  // code paths (loading / username / missing username / error) without opening a
+  // real account, sending email or firing an auth grant against the project.
+  const SESSION_KEY = 'loky.ai.next.auth.v1';
+  const userId = '11111111-2222-3333-4444-555555555555';
+  const userEmail = 'loky.tester@example.test';
+
+  async function openSessionPage({ profiles, delayMs = 0 }) {
+    const sessionPage = await browser.newPage();
+    await sessionPage.setViewport({ width: 1280, height: 900 });
+    await sessionPage.evaluateOnNewDocument(
+      (key, session) => {
+        window.localStorage.setItem(key, JSON.stringify(session));
+      },
+      SESSION_KEY,
+      {
+        accessToken: 'test-access-token',
+        refreshToken: 'test-refresh-token',
+        expiresAt: Date.now() + 3600 * 1000,
+        user: { id: userId, email: userEmail },
+      },
+    );
+
+    const seen = { profiles: 0, tokenPosts: 0 };
+    await sessionPage.setRequestInterception(true);
+    sessionPage.on('request', async (request) => {
+      const url = request.url();
+      if (/\/auth\/v1\/token/.test(url) && request.method() === 'POST') seen.tokenPosts += 1;
+      if (url.includes('/rest/v1/profiles')) {
+        seen.profiles += 1;
+        if (delayMs) await new Promise((resolve) => setTimeout(resolve, delayMs));
+        request
+          .respond({
+            status: profiles.status,
+            contentType: 'application/json',
+            headers: { 'access-control-allow-origin': '*' },
+            body: JSON.stringify(profiles.body),
+          })
+          .catch(() => {});
+        return;
+      }
       request.continue().catch(() => {});
-      return;
-    }
-    request.continue().catch(() => {});
+    });
+    return { sessionPage, seen };
+  }
+
+  // 4a. Loading → signed in with a real username from the profiles table.
+  const loadingRun = await openSessionPage({
+    profiles: { status: 200, body: [{ id: userId, username: 'loky_user1', display_name: null, avatar_seed: null }] },
+    delayMs: 1000,
   });
-  await loadingPage.goto(base, { waitUntil: 'domcontentloaded', timeout: 45000 });
-  const loadingChip = await loadingPage
+  await loadingRun.sessionPage.goto(base, { waitUntil: 'domcontentloaded', timeout: 45000 });
+  const loadingChip = await loadingRun.sessionPage
     .waitForFunction(
       () => {
         const node = document.getElementById('navAccount');
         return node && node.dataset.state === 'loading' ? node.textContent.trim() : false;
       },
-      { timeout: 3000 },
+      { timeout: 4000 },
     )
     .then((handle) => handle.jsonValue())
     .catch(() => '');
   check('chip shows a visible loading state while the session is checked', /checking/i.test(loadingChip), `text="${loadingChip}"`);
 
-  const settled = await loadingPage
+  const loadingDialog = await loadingRun.sessionPage.evaluate(() => {
+    document.getElementById('navAccount')?.click();
+    const state = document.getElementById('profileState');
+    return {
+      open: !document.getElementById('profileDialog').hidden,
+      text: state && !state.hidden ? state.textContent.trim() : '',
+    };
+  });
+  check('profile dialog explains it is loading', /loading your profile/i.test(loadingDialog.text), `text="${loadingDialog.text}"`);
+
+  const settled = await loadingRun.sessionPage
     .waitForFunction(
-      () => {
-        const node = document.getElementById('navAccount');
-        return node && node.dataset.state !== 'loading';
-      },
+      () => document.getElementById('navAccount')?.dataset.state !== 'loading',
       { timeout: 15000 },
     )
     .then(() => true)
     .catch(() => false);
   check('chip leaves the loading state once the session is resolved', settled);
-  await loadingPage.close();
+
+  const signedIn = await loadingRun.sessionPage.evaluate(() => {
+    const chip = document.getElementById('navAccount');
+    const meta = document.getElementById('profileMeta');
+    const state = document.getElementById('profileState');
+    return {
+      chipState: chip?.dataset.state,
+      chipLabel: document.getElementById('navAccountLabel')?.textContent.trim() || '',
+      avatar: document.getElementById('navAvatar')?.textContent.trim() || '',
+      dialogOpen: !document.getElementById('profileDialog').hidden,
+      handle: document.getElementById('profileHandle')?.textContent.trim() || '',
+      metaHidden: Boolean(meta?.hidden),
+      metaText: (meta?.textContent || '').replace(/\s+/g, ' ').trim(),
+      stateHidden: Boolean(state?.hidden),
+      stateText: state && !state.hidden ? state.textContent.trim() : '',
+      actions: [...(document.getElementById('profileActions')?.querySelectorAll('button') || [])].map((b) => b.textContent.trim()),
+    };
+  });
+  check('signed-in chip shows the database username', /loky_user1/i.test(signedIn.chipLabel), `label="${signedIn.chipLabel}"`);
+  check('signed-in chip state is "in"', signedIn.chipState === 'in', `state=${signedIn.chipState}`);
+  check('avatar falls back to initials of the username', signedIn.avatar.length > 0 && signedIn.avatar !== '?', `avatar="${signedIn.avatar}"`);
+  check('profile dialog shows the same username', /@loky_user1/.test(signedIn.handle), `handle="${signedIn.handle}"`);
+  check('profile dialog lists username and email', !signedIn.metaHidden && /loky_user1/.test(signedIn.metaText) && signedIn.metaText.includes(userEmail), signedIn.metaText);
+  check('signed-in profile has no loading/error notice', signedIn.stateHidden, signedIn.stateText);
+  check('signed-in profile offers Sign out', signedIn.actions.some((label) => /sign out/i.test(label)), signedIn.actions.join(', '));
+  check('signed-in session fired no auth token request', loadingRun.seen.tokenPosts === 0, `posts=${loadingRun.seen.tokenPosts}`);
+  await loadingRun.sessionPage.close();
+
+  // 4b. Signed in but no username row yet: offer setup, never invent a handle.
+  const noNameRun = await openSessionPage({ profiles: { status: 200, body: [] } });
+  await noNameRun.sessionPage.goto(base, { waitUntil: 'networkidle2', timeout: 45000 });
+  await noNameRun.sessionPage
+    .waitForFunction(() => document.getElementById('navAccount')?.dataset.state !== 'loading', { timeout: 15000 })
+    .catch(() => {});
+  const noName = await noNameRun.sessionPage.evaluate(() => {
+    document.getElementById('navAccount')?.click();
+    const state = document.getElementById('profileState');
+    return {
+      chipState: document.getElementById('navAccount')?.dataset.state,
+      chipLabel: document.getElementById('navAccountLabel')?.textContent.trim() || '',
+      handle: document.getElementById('profileHandle')?.textContent.trim() || '',
+      metaHidden: Boolean(document.getElementById('profileMeta')?.hidden),
+      stateText: state && !state.hidden ? state.textContent.trim() : '',
+      actions: [...(document.getElementById('profileActions')?.querySelectorAll('button') || [])].map((b) => b.textContent.trim()),
+    };
+  });
+  check('missing username falls back to the email in the chip', noName.chipLabel.includes(userEmail), `label="${noName.chipLabel}"`);
+  check('missing username marks the chip as needing setup', noName.chipState === 'setup', `state=${noName.chipState}`);
+  check('missing username is never fabricated', /no username/i.test(noName.handle), `handle="${noName.handle}"`);
+  check('missing username hides the username/email rows', noName.metaHidden);
+  check('missing username offers a setup path', noName.actions.some((label) => /choose a username/i.test(label)), noName.actions.join(', '));
+  check('missing username explains the setup step', /choose a username/i.test(noName.stateText), noName.stateText);
+  await noNameRun.sessionPage.close();
+
+  // 4c. Profile request fails: useful error, manual retry only, no retry storm.
+  const errorRun = await openSessionPage({ profiles: { status: 500, body: { message: 'boom' } } });
+  await errorRun.sessionPage.goto(base, { waitUntil: 'networkidle2', timeout: 45000 });
+  await errorRun.sessionPage
+    .waitForFunction(() => document.getElementById('navAccount')?.dataset.state !== 'loading', { timeout: 15000 })
+    .catch(() => {});
+  await new Promise((resolve) => setTimeout(resolve, 800));
+  const errored = await errorRun.sessionPage.evaluate(() => {
+    document.getElementById('navAccount')?.click();
+    const state = document.getElementById('profileState');
+    return {
+      stateKind: state?.dataset.kind || '',
+      stateText: state && !state.hidden ? state.textContent.trim() : '',
+      handle: document.getElementById('profileHandle')?.textContent.trim() || '',
+      actions: [...(document.getElementById('profileActions')?.querySelectorAll('button') || [])].map((b) => b.textContent.trim()),
+    };
+  });
+  check('profile error is shown to the user', errored.stateKind === 'error' && errored.stateText.length > 0, `${errored.stateKind}: ${errored.stateText}`);
+  check('profile error does not claim a username', !/loky_user1/.test(errored.handle), `handle="${errored.handle}"`);
+  check('profile error offers a manual retry', errored.actions.some((label) => /try again/i.test(label)), errored.actions.join(', '));
+  check('failed profile load is not retried automatically', errorRun.seen.profiles <= 1, `requests=${errorRun.seen.profiles}`);
+  await errorRun.sessionPage.close();
 
   // 5. Reload restores the signed-out state instead of resetting to blank.
   await page.reload({ waitUntil: 'networkidle2', timeout: 45000 });
