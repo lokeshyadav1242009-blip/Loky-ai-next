@@ -182,6 +182,190 @@ function clockLabel(value) {
 
 /* -------------------------------- rendering ------------------------------- */
 
+/**
+ * The nav chip is the always-visible answer to "am I signed in?". It is painted
+ * from the same state as the profile dialog so the two can never disagree.
+ */
+function renderChip() {
+  if (!el.navAccount) return;
+
+  const signedIn = Boolean(state.user);
+  let label = 'Sign in';
+  let avatarText = '?';
+  let seed = 'signed-out';
+  let tone = 'out';
+
+  if (state.status === 'loading' || state.status === 'unknown') {
+    label = 'Checking…';
+    avatarText = '…';
+    tone = 'loading';
+  } else if (signedIn) {
+    const handle = state.profile?.username || '';
+    label = handle ? displayUsername(handle) : state.user.email || 'Signed in';
+    seed = handle || state.user.email || 'signed-in';
+    avatarText = initialsFor(seed) || '?';
+    tone = handle ? 'in' : 'setup';
+  }
+
+  if (state.busy) tone = 'busy';
+
+  el.navAccount.dataset.state = tone;
+  if (el.navAccountLabel) el.navAccountLabel.textContent = label;
+  if (el.navAvatar) {
+    el.navAvatar.textContent = avatarText;
+    el.navAvatar.style.setProperty('--avatar-color', avatarColorFor(seed));
+  }
+
+  const detail = !signedIn
+    ? 'Signed out. Open your profile to sign in.'
+    : state.profile?.username
+      ? `Signed in as ${displayUsername(state.profile.username)}`
+      : 'Signed in. No username set yet.';
+  el.navAccount.setAttribute('aria-label', `Profile: ${detail}`);
+  el.navAccount.title = detail;
+}
+
+function profileActionButton(label, { primary = false, onClick } = {}) {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = primary ? 'btn btn--primary dm-btn' : 'btn dm-btn';
+  button.textContent = label;
+  button.addEventListener('click', onClick);
+  return button;
+}
+
+/**
+ * Paint the profile dialog. Every state the user can be in has an explicit
+ * branch, so the dialog is never an empty shell.
+ */
+function renderProfile() {
+  if (!el.profileDialog) return;
+
+  const signedIn = Boolean(state.user);
+  const signedOut = state.status === 'signed_out' || (!signedIn && state.status !== 'loading');
+
+  if (el.profileActions) el.profileActions.replaceChildren();
+  if (el.profileMeta) el.profileMeta.hidden = !(signedIn && state.profile?.username);
+  if (el.profileAvatar) el.profileAvatar.textContent = '?';
+
+  if (signedIn && state.profile?.username) {
+    if (el.profileAvatar) {
+      el.profileAvatar.textContent = initialsFor(state.profile.username) || '?';
+      el.profileAvatar.style.setProperty('--avatar-color', avatarColorFor(state.profile.username));
+    }
+    if (el.profileHandle) el.profileHandle.textContent = displayUsername(state.profile.username);
+    if (el.profileUsername) el.profileUsername.textContent = displayUsername(state.profile.username);
+    if (el.profileEmail) el.profileEmail.textContent = state.user.email || 'Not provided';
+  } else if (signedIn) {
+    if (el.profileAvatar) {
+      el.profileAvatar.textContent = initialsFor(state.user.email || '?') || '?';
+      el.profileAvatar.style.setProperty('--avatar-color', avatarColorFor(state.user.email || 'signed-in'));
+    }
+    if (el.profileHandle) el.profileHandle.textContent = 'No username yet';
+    if (el.profileEmail) el.profileEmail.textContent = state.user.email || 'Not provided';
+  } else {
+    if (el.profileHandle) el.profileHandle.textContent = 'Signed out';
+  }
+
+  // Loading state: the profile request is in flight.
+  if (state.status === 'loading') {
+    if (el.profileState) {
+      el.profileState.hidden = false;
+      el.profileState.dataset.kind = 'info';
+      el.profileState.textContent = 'Loading your profile…';
+    }
+    return;
+  }
+
+  // Error state: keep the retry explicit, never automatic.
+  if (state.status === 'error') {
+    if (el.profileState) {
+      el.profileState.hidden = false;
+      el.profileState.dataset.kind = 'error';
+      el.profileState.textContent = state.authError || 'Your profile could not be loaded.';
+    }
+    el.profileActions?.append(
+      profileActionButton(isCoolingDown() ? 'Please wait…' : 'Try again', {
+        primary: true,
+        onClick: () => {
+          if (!isCoolingDown()) refreshAccount();
+        },
+      })
+    );
+    if (!signedIn) {
+      el.profileActions?.append(
+        profileActionButton('Sign in', {
+          onClick: () => {
+            closeProfile();
+            hooks.openMessages();
+          },
+        })
+      );
+    }
+    return;
+  }
+
+  if (el.profileState) {
+    el.profileState.hidden = true;
+    el.profileState.textContent = '';
+  }
+
+  if (signedIn) {
+    if (!state.profile?.username) {
+      if (el.profileState) {
+        el.profileState.hidden = false;
+        el.profileState.dataset.kind = 'info';
+        el.profileState.textContent = 'Choose a username so other people can find you.';
+      }
+      el.profileActions?.append(
+        profileActionButton('Choose a username', {
+          primary: true,
+          onClick: () => {
+            closeProfile();
+            hooks.openMessages();
+            el.usernameInput?.focus();
+          },
+        })
+      );
+    }
+    el.profileActions?.append(
+      profileActionButton('Open Messages', {
+        primary: Boolean(state.profile?.username),
+        onClick: () => {
+          closeProfile();
+          hooks.openMessages();
+        },
+      }),
+      profileActionButton('Sign out', {
+        onClick: () => {
+          closeProfile();
+          doSignOut();
+        },
+      })
+    );
+    return;
+  }
+
+  // Signed out: offer the sign-in entry point instead of an empty profile.
+  if (el.profileState) {
+    el.profileState.hidden = false;
+    el.profileState.dataset.kind = 'info';
+    el.profileState.textContent = signedOut
+      ? 'You are signed out. Sign in to sync your username and chat with other people.'
+      : 'Checking your session…';
+  }
+  el.profileActions?.append(
+    profileActionButton('Sign in', {
+      primary: true,
+      onClick: () => {
+        closeProfile();
+        hooks.openMessages();
+        window.setTimeout(() => el.email?.focus(), 60);
+      },
+    })
+  );
+}
+
 function renderAccount() {
   const signedIn = Boolean(state.user);
 
@@ -191,6 +375,9 @@ function renderAccount() {
 
   if (!signedIn) {
     if (el.whoami) el.whoami.textContent = '';
+    if (el.whoamiEmail) el.whoamiEmail.textContent = '';
+    renderChip();
+    renderProfile();
     return;
   }
 
@@ -199,6 +386,7 @@ function renderAccount() {
       ? displayUsername(state.profile.username)
       : state.user.email || 'Signed in';
   }
+  if (el.whoamiEmail) el.whoamiEmail.textContent = state.user.email || '';
 
   // Username form is shown until a username exists; afterwards it becomes the
   // "change username" control, prefilled with the current one.
@@ -211,6 +399,9 @@ function renderAccount() {
   if (el.usernameHelp && !state.profile) {
     el.usernameHelp.textContent = 'Pick a username so people can find you. 3–20 letters, numbers or _';
   }
+
+  renderChip();
+  renderProfile();
 }
 
 function renderResults() {
