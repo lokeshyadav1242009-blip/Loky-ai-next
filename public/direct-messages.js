@@ -511,7 +511,6 @@ export function initAccountUI(nextHooks = {}) {
   el.signUpBtn?.addEventListener('click', submitSignUp);
   el.signOutBtn?.addEventListener('click', doSignOut);
   el.usernameForm?.addEventListener('submit', submitUsername);
-  el.findForm?.addEventListener('submit', submitSearch);
 
   const findForm = document.getElementById('dmFindForm');
   findForm?.addEventListener('submit', submitSearch);
