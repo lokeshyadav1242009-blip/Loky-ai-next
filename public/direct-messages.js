@@ -630,9 +630,25 @@ async function doSignOut() {
  *
  * This runs at page load, not just when Messages opens, so a stored session is
  * restored and validated on reload. It never retries by itself: if the profile
- * request fails the dialog shows the error and a manual "Try again".
+ * request fails (or times out, see REQUEST_TIMEOUT_MS) the dialog shows the
+ * error and a manual "Try again".
+ *
+ * At most one check runs at a time; concurrent callers share it, and `force`
+ * waits for the current one before starting a fresh check (used after sign-in).
  */
-export async function bootstrap() {
+export async function bootstrap({ force = false } = {}) {
+  if (profileRequest) {
+    if (!force) return profileRequest;
+    await profileRequest.catch(() => {});
+  }
+
+  profileRequest = runBootstrap().finally(() => {
+    profileRequest = null;
+  });
+  return profileRequest;
+}
+
+async function runBootstrap() {
   const hadUser = Boolean(state.user);
   state.user = currentUser();
 
@@ -663,9 +679,30 @@ export async function bootstrap() {
     if (state.user) setStatus(describeError(error), 'error');
   }
 
+  // Safety net: the chip must never be left on "Checking…", whatever happened
+  // above. Anything still pending here is reported as a retryable error.
+  if (state.status === 'loading') {
+    state.status = state.user ? 'error' : 'signed_out';
+    if (state.user && !state.authError) {
+      state.authError = 'Your profile could not be loaded. Tap Try again.';
+    }
+  }
+
   renderAccount();
   if (state.status !== 'loading') hooks.rerender();
   if (hadUser !== Boolean(state.user)) renderAccount();
+}
+
+/** Read-only view of the account check, used by tests and diagnostics. */
+export function profileStatus() {
+  return {
+    status: state.status,
+    error: state.authError,
+    hasUser: Boolean(state.user),
+    username: state.profile?.username || '',
+    email: state.user?.email || '',
+    inFlight: Boolean(profileRequest),
+  };
 }
 
 /* ------------------------------ remote threads ---------------------------- */
