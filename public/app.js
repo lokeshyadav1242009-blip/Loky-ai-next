@@ -25,6 +25,7 @@ import {
   titleFrom,
 } from './chat-utils.js';
 import { initMessages, leaveMessages } from './messages.js';
+import { initProfileUI } from './direct-messages.js';
 
 
 const HEALTH_REFRESH_MS = 60000;
@@ -1336,6 +1337,11 @@ if (!state.activeId && state.conversations.length > 0) {
 renderHistory();
 renderMessages();
 autoGrow();
+
+/* Account state is page-wide, not a Messages-only detail: restore any stored
+   session and paint the nav chip + profile here, before the user opens
+   Messages. Failures stay local to the chip/dialog and never block the chat. */
+initProfileUI({ openMessages: () => setSection('messages') });
 
 // Opening animation — app open only, never on new chat / conversation switch.
 playIntro();
