@@ -17,8 +17,17 @@
 
 import { displayUsername, normalizeUsername, validateUsername } from './username-utils.js';
 import {
+  createSignupIntent,
+  describeAuthLinkError,
+  isSignupIntentUsable,
+  parseAuthRedirect,
+  stripAuthRedirect,
+  validateSignupForm,
+} from './auth-utils.js';
+import {
   SupabaseError,
   currentUser,
+  establishSession,
   getMyProfile,
   isSignedIn,
   listMessages,
@@ -29,6 +38,7 @@ import {
   signOut as apiSignOut,
   signUp as apiSignUp,
   startConversation,
+  verifyTokenHash,
 } from './supabase-client.js';
 import { avatarColorFor, initialsFor } from './messages-utils.js';
 
