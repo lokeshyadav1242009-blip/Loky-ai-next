@@ -1201,7 +1201,8 @@ export function initAccountUI(nextHooks = {}) {
     el.usernameHelp.dataset.kind = check.ok ? 'ok' : 'error';
   });
 
-  bootstrap().catch(() => {});
+  // Consume an auth redirect first, then validate the (possibly new) session.
+  startAuth();
 }
 
 /** Called by messages.js when the Messages section becomes visible. */
@@ -1270,8 +1271,9 @@ export function initProfileUI(nextHooks = {}) {
     });
   }
 
-  // Paint the unknown state immediately, then validate any stored session.
+  // Paint the unknown state immediately, then handle any auth redirect and
+  // validate the session. startAuth() is shared, so this is not a second run.
   renderChip();
   renderProfile();
-  bootstrap().catch(() => {});
+  startAuth();
 }
