@@ -15,6 +15,10 @@ import assert from 'node:assert/strict';
  * here. Nothing else is mocked: the real request/timeout code runs.
  */
 
+// Captured before any test mocks timers, so the watchdog is a real clock.
+const realSetTimeout = globalThis.setTimeout.bind(globalThis);
+const realClearTimeout = globalThis.clearTimeout.bind(globalThis);
+
 const store = new Map();
 globalThis.localStorage = {
   getItem: (key) => (store.has(key) ? store.get(key) : null),
@@ -89,10 +93,10 @@ async function flush() {
 function watchdog(promise, label = 'profile request') {
   let timer = null;
   const guard = new Promise((_, reject) => {
-    timer = setTimeout(() => reject(new Error(`${label} never settled`)), 3000);
+    timer = realSetTimeout(() => reject(new Error(`${label} never settled`)), 3000);
     timer.unref?.();
   });
-  return Promise.race([promise, guard]).finally(() => clearTimeout(timer));
+  return Promise.race([promise, guard]).finally(() => realClearTimeout(timer));
 }
 
 /* ---------------------------------- tests --------------------------------- */
