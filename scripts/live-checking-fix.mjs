@@ -25,6 +25,14 @@ const USER_ID = '11111111-2222-3333-4444-555555555555';
 const USER_EMAIL = 'lokesh@example.com';
 const USERNAME = 'lokesh_dev';
 
+// A mocked Supabase response still has to satisfy CORS, or Chrome blocks it and
+// the page sees a network error instead of the mocked row.
+const CORS_HEADERS = {
+  'access-control-allow-origin': '*',
+  'access-control-allow-methods': 'GET,POST,PATCH,DELETE,OPTIONS',
+  'access-control-allow-headers': '*',
+};
+
 const results = [];
 function check(name, ok, detail = '') {
   results.push({ name, ok, detail });
