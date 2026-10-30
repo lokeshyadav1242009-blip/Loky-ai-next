@@ -382,10 +382,20 @@ try {
   await page.reload({ waitUntil: 'networkidle2', timeout: 45000 }).catch(() => {});
   await page.screenshot({ path: 'artifacts/live-profile-desktop.png' }).catch(() => {});
 
-  // 8. No runtime breakage.
+  // 8. No runtime breakage. The local server intentionally boots without an AI
+  // key, so /api/health answers 503; assert that is the ONLY 5xx source rather
+  // than blanket-ignoring console noise.
   check('no uncaught page errors', pageErrors.length === 0, pageErrors.join(' | ').slice(0, 300));
-  const relevantConsole = consoleErrors.filter((text) => !/favicon|404 \(Not Found\)/i.test(text));
-  check('no console errors', relevantConsole.length === 0, relevantConsole.join(' | ').slice(0, 300));
+  const nonHealth5xx = failed5xx.filter((entry) => !/\/api\/health/.test(entry));
+  check('no 5xx from the app APIs (local /api/health probe excepted)', nonHealth5xx.length === 0, nonHealth5xx.slice(0, 3).join(' | '));
+  const onlyHealthIsFailing = nonHealth5xx.length === 0;
+  const relevantConsole = consoleErrors.filter((text) => {
+    if (/favicon|404 \(Not Found\)/i.test(text)) return false;
+    // The unconfigured local AI key makes /api/health return 503; nothing else does.
+    if (onlyHealthIsFailing && /status of 503 \(Service Unavailable\)/i.test(text)) return false;
+    return true;
+  });
+  check('no console errors beyond the local /api/health 503', relevantConsole.length === 0, relevantConsole.join(' | ').slice(0, 300));
   check('still no auth token POST after all reloads', authTokenRequests.length === 0, authTokenRequests.slice(0, 2).join(' | '));
 } catch (error) {
   check('check run completed', false, String(error).slice(0, 300));
