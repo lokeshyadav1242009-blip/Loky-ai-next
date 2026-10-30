@@ -344,13 +344,15 @@ async function rest(path, { method = 'GET', body, prefer, retry = true } = {}) {
 
   let response;
   try {
-    response = await fetch(`${config.url}/rest/v1/${path}`, {
+    response = await fetchWithTimeout(`${config.url}/rest/v1/${path}`, {
       method,
       headers,
       body: body === undefined ? undefined : JSON.stringify(body),
     });
-  } catch {
-    throw new SupabaseError('network', 'Could not reach the database. Check your connection.');
+  } catch (error) {
+    throw error instanceof SupabaseError
+      ? error
+      : new SupabaseError('network', 'Could not reach the database. Check your connection.');
   }
 
   // Expired token revoked server-side: refresh once and retry.
