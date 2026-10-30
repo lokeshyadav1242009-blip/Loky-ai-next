@@ -96,6 +96,8 @@ const state = {
   cooldownTimer: null,
   results: [],
   busy: false,
+  /** True once "Create account" has revealed the display name + username fields. */
+  signupOpen: false,
   pollTimer: null,
   pollThreadId: null,
   renderToken: 0,
