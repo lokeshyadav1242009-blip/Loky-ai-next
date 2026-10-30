@@ -95,9 +95,45 @@ function setStatus(message, kind = 'info') {
 
 function setBusy(busy) {
   state.busy = busy;
+  const locked = busy || isCoolingDown();
   for (const button of [el.signInBtn, el.signUpBtn, el.usernameSave, el.signOutBtn]) {
-    if (button) button.disabled = busy;
+    if (button) button.disabled = locked;
   }
+  renderChip();
+  renderProfile();
+}
+
+/** True while a failed attempt has locked the buttons. */
+function isCoolingDown() {
+  return state.cooldownUntil > Date.now();
+}
+
+/**
+ * Lock the auth buttons for a while after a rate limit. The point is that a
+ * throttled request must never be re-fired by the user tapping again, which is
+ * what turns one 429 into a long lockout.
+ */
+function startCooldown(seconds, reason) {
+  const wait = Math.max(1, Math.min(Math.ceil(seconds) || 60, 3600));
+  state.cooldownUntil = Date.now() + wait * 1000;
+  if (state.cooldownTimer) clearInterval(state.cooldownTimer);
+
+  const paint = () => {
+    const left = Math.ceil((state.cooldownUntil - Date.now()) / 1000);
+    if (left > 0) {
+      setStatus(`${reason} You can try again in ${left}s.`, 'error');
+      return;
+    }
+    clearInterval(state.cooldownTimer);
+    state.cooldownTimer = null;
+    state.cooldownUntil = 0;
+    setBusy(false);
+    setStatus('You can try again now.', 'info');
+  };
+
+  setBusy(false);
+  state.cooldownTimer = setInterval(paint, 1000);
+  paint();
 }
 
 /** Turn any thrown thing into something a human can act on. */
@@ -112,9 +148,20 @@ export function describeError(error) {
     if (error.code === 'signed_out') return 'Please sign in again.';
     if (error.code === 'network') return 'Network problem. Check your connection and retry.';
     if (error.code === 'username_taken') return 'That username is already taken. Try another one.';
+    if (error.code === 'email_unconfirmed') {
+      return 'This account still needs its email confirmed. Open the confirmation link we emailed you, then sign in.';
+    }
     return error.message || 'Something went wrong.';
   }
   return 'Something went wrong. Please try again.';
+}
+
+/** Extra guidance shown next to an error, without repeating the error itself. */
+function errorHint(error) {
+  if (error instanceof SupabaseError && error.code === 'email_rate_limited') {
+    return 'This limit is per project, so it applies on every device until the quota resets.';
+  }
+  return '';
 }
 
 function dayLabel(value) {
