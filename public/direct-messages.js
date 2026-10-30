@@ -605,6 +605,8 @@ async function doSignOut() {
   state.user = null;
   state.profile = null;
   state.results = [];
+  state.status = 'signed_out';
+  state.authError = '';
   stopPolling();
   renderAccount();
   renderResults();
@@ -614,23 +616,47 @@ async function doSignOut() {
 
 /* --------------------------------- bootstrap ------------------------------ */
 
-/** Load (or reload) the session + profile and repaint the panel. */
+/**
+ * Load (or reload) the session + profile and repaint everywhere.
+ *
+ * This runs at page load, not just when Messages opens, so a stored session is
+ * restored and validated on reload. It never retries by itself: if the profile
+ * request fails the dialog shows the error and a manual "Try again".
+ */
 export async function bootstrap() {
+  const hadUser = Boolean(state.user);
   state.user = currentUser();
 
   if (!state.user) {
     state.profile = null;
+    state.status = 'signed_out';
+    state.authError = '';
     renderAccount();
+    hooks.rerender();
     return;
   }
 
+  state.status = 'loading';
+  state.authError = '';
+  renderChip();
+  renderProfile();
+
   try {
     state.profile = await getMyProfile();
+    state.status = 'signed_in';
   } catch (error) {
     state.profile = null;
-    setStatus(describeError(error), 'error');
+    // A failed refresh clears the stored session, so re-read it: a dead session
+    // must show as signed out, not as a phantom logged-in user.
+    state.user = currentUser();
+    state.status = state.user ? 'error' : 'signed_out';
+    state.authError = state.user ? describeError(error) : '';
+    if (state.user) setStatus(describeError(error), 'error');
   }
+
   renderAccount();
+  if (state.status !== 'loading') hooks.rerender();
+  if (hadUser !== Boolean(state.user)) renderAccount();
 }
 
 /* ------------------------------ remote threads ---------------------------- */
