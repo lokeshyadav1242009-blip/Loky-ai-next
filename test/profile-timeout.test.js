@@ -108,6 +108,7 @@ test('the timeout budget is a few seconds, not forever', () => {
 
 test('a profile request that never settles fails as a network error', async (t) => {
   mode = 'stall';
+  calls.length = 0;
   t.mock.timers.enable({ apis: ['setTimeout'] });
   t.after(() => t.mock.timers.reset());
 
@@ -125,6 +126,7 @@ test('a profile request that never settles fails as a network error', async (t) 
 
 test('account state leaves "checking" after a timeout, then recovers on retry', async (t) => {
   mode = 'stall';
+  calls.length = 0;
   t.mock.timers.enable({ apis: ['setTimeout'] });
   t.after(() => t.mock.timers.reset());
 
@@ -156,6 +158,7 @@ test('account state leaves "checking" after a timeout, then recovers on retry', 
 
 test('concurrent profile checks share one request', async (t) => {
   mode = 'stall';
+  calls.length = 0;
   t.mock.timers.enable({ apis: ['setTimeout'] });
   t.after(() => t.mock.timers.reset());
 

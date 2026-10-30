@@ -636,12 +636,16 @@ async function doSignOut() {
  * At most one check runs at a time; concurrent callers share it, and `force`
  * waits for the current one before starting a fresh check (used after sign-in).
  */
-export async function bootstrap({ force = false } = {}) {
+export function bootstrap({ force = false } = {}) {
   if (profileRequest) {
+    // Already checking: hand back the same request so a second tap is free.
     if (!force) return profileRequest;
-    await profileRequest.catch(() => {});
+    return profileRequest.catch(() => {}).then(() => startProfileCheck());
   }
+  return startProfileCheck();
+}
 
+function startProfileCheck() {
   profileRequest = runBootstrap().finally(() => {
     profileRequest = null;
   });
