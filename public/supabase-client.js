@@ -34,6 +34,53 @@ export class SupabaseError extends Error {
   }
 }
 
+/* -------------------------------- timeouts -------------------------------- */
+
+/**
+ * No network request may hang the UI forever. A pending PostgREST request is
+ * what used to leave the account chip stuck on "Checking…", so every call now
+ * gives up after this budget and surfaces an ordinary network error the UI can
+ * present (and the user can retry manually).
+ */
+export const REQUEST_TIMEOUT_MS = 8000;
+
+/**
+ * `fetch` with a hard deadline.
+ *
+ * The abort signal is what a real browser honours, and the race is what
+ * guarantees settlement even if a request never reacts to the abort. The timer
+ * is always cleared, so a settled request leaves nothing behind.
+ */
+async function fetchWithTimeout(url, options = {}, ms = REQUEST_TIMEOUT_MS) {
+  const controller = new AbortController();
+  let timer = null;
+
+  const timedOut = new Promise((_, reject) => {
+    timer = setTimeout(() => {
+      controller.abort();
+      reject(
+        new SupabaseError(
+          'network',
+          'The request timed out. Check your connection and try again.',
+          0
+        )
+      );
+    }, ms);
+  });
+
+  try {
+    return await Promise.race([
+      fetch(url, { ...options, signal: controller.signal }),
+      timedOut,
+    ]);
+  } catch (error) {
+    if (error instanceof SupabaseError) throw error;
+    throw new SupabaseError('network', 'Could not reach the server. Check your connection.');
+  } finally {
+    if (timer !== null) clearTimeout(timer);
+  }
+}
+
 /**
  * How long Auth asked us to wait. GoTrue sends `Retry-After` on 429; when it is
  * absent we fall back to a conservative default so the UI can still lock the
