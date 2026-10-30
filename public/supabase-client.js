@@ -162,19 +162,55 @@ async function authRequest(path, body) {
   if (!response.ok) {
     const message =
       data?.msg || data?.message || data?.error_description || data?.error || 'Authentication failed.';
+    // GoTrue gives a machine-readable reason in error_code; message text is the
+    // fallback for older deployments.
+    const reason = String(data?.error_code || data?.code || '');
+
     // GoTrue reports a taken email as "User already registered" (422/400).
-    if (/already registered|already exists/i.test(message)) {
+    if (/already registered|already exists|user_already_exists/i.test(`${reason} ${message}`)) {
       throw new SupabaseError('email_taken', 'An account with that email already exists.', response.status);
     }
-    if (/invalid login credentials/i.test(message)) {
+    if (reason === 'invalid_credentials' || /invalid login credentials/i.test(message)) {
       throw new SupabaseError('bad_credentials', 'Wrong email or password.', response.status);
     }
-    if (/email not confirmed/i.test(message)) {
-      throw new SupabaseError('email_unconfirmed', 'Please confirm your email address first.', response.status);
+    // The account exists but the address was never confirmed, so it cannot sign
+    // in yet. This is a configuration state, not a wrong password.
+    if (reason === 'email_not_confirmed' || /email not confirmed/i.test(message)) {
+      throw new SupabaseError(
+        'email_unconfirmed',
+        'This account still needs its email confirmed. Open the confirmation link we emailed you, then sign in.',
+        response.status
+      );
     }
+    if (reason === 'signup_disabled' || /signups not allowed|signup is disabled/i.test(message)) {
+      throw new SupabaseError('signup_disabled', 'New accounts are currently disabled for this project.', response.status);
+    }
+    if (reason === 'weak_password' || /password should be at least/i.test(message)) {
+      throw new SupabaseError('weak_password', 'That password is too weak. Use at least 6 characters.', response.status);
+    }
+
     if (response.status === 429) {
-      throw new SupabaseError('rate_limited', 'Too many attempts. Please wait a moment.', 429);
+      // Supabase throttles signup confirmation emails per project, which is why
+      // this appears on every device at once. Surfacing the distinction lets the
+      // user retry the right way instead of re-tapping the same button.
+      const wait = retryAfterSeconds(response, 60);
+      if (/email/i.test(`${reason} ${message}`) || /signup/i.test(reason)) {
+        throw new SupabaseError(
+          'email_rate_limited',
+          'Supabase has hit its limit for sending confirmation emails, so no new confirmation can go out right now. ' +
+            'Try again in about an hour, or ask the project owner to turn off "Confirm email" for this project.',
+          429,
+          wait
+        );
+      }
+      throw new SupabaseError(
+        'rate_limited',
+        `Too many attempts. Please wait ${wait}s before trying again.`,
+        429,
+        wait
+      );
     }
+
     throw new SupabaseError('auth', message, response.status);
   }
 
