@@ -1144,6 +1144,10 @@ export function initAccountUI(nextHooks = {}) {
   el.searchInput = document.getElementById('dmUserSearch');
   el.results = document.getElementById('dmResults');
   el.notice = document.getElementById('dmNotice');
+  el.signupFields = document.getElementById('dmSignupFields');
+  el.displayName = document.getElementById('dmDisplayName');
+  el.usernameNew = document.getElementById('dmUsernameNew');
+  el.signupHelp = document.getElementById('dmSignupHelp');
 
   if (state.ready) return;
   state.ready = true;
