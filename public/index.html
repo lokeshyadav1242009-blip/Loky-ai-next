@@ -569,6 +569,43 @@
       </div>
     </div>
 
+    <!-- ----------------------------- profile ------------------------------ -->
+    <!-- Opened from the account chip in the app nav, so the signed-in state is
+         visible from every section. Reuses the About dialog's styling. -->
+    <div class="about" id="profileDialog" hidden>
+      <div class="about__backdrop" id="profileBackdrop"></div>
+      <div class="about__card profile" role="dialog" aria-modal="true" aria-labelledby="profileTitle">
+        <button class="icon-btn icon-btn--sm about__close" id="profileClose" type="button" aria-label="Close">
+          <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+            <path d="M6 6l12 12M18 6 6 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+          </svg>
+        </button>
+
+        <div class="profile__head">
+          <span class="profile__avatar" id="profileAvatar" aria-hidden="true">?</span>
+          <div class="profile__id">
+            <h2 class="about__title profile__title" id="profileTitle">Your profile</h2>
+            <p class="profile__handle" id="profileHandle">Signed out</p>
+          </div>
+        </div>
+
+        <p class="profile__state" id="profileState" aria-live="polite" hidden></p>
+
+        <dl class="profile__meta" id="profileMeta" hidden>
+          <div class="profile__row">
+            <dt>Username</dt>
+            <dd id="profileUsername"></dd>
+          </div>
+          <div class="profile__row">
+            <dt>Email</dt>
+            <dd id="profileEmail"></dd>
+          </div>
+        </dl>
+
+        <div class="profile__actions" id="profileActions"></div>
+      </div>
+    </div>
+
     <template id="messageTemplate">
       <article class="msg">
         <div class="msg__avatar" aria-hidden="true"></div>
