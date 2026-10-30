@@ -51,12 +51,30 @@ const el = {
   searchInput: null,
   results: null,
   notice: null,
+  // Nav-level account chip + profile dialog (visible from every section).
+  navAccount: null,
+  navAvatar: null,
+  navAccountLabel: null,
+  profileDialog: null,
+  profileClose: null,
+  profileAvatar: null,
+  profileHandle: null,
+  profileEmail: null,
+  profileState: null,
+  profileActions: null,
 };
 
 const state = {
   ready: false,
+  profileReady: false,
   user: null,
   profile: null,
+  /** 'unknown' | 'loading' | 'signed_out' | 'signed_in' | 'error' */
+  status: 'unknown',
+  authError: '',
+  /** Blocks repeated failed sign-in/sign-up attempts until the cooldown ends. */
+  cooldownUntil: 0,
+  cooldownTimer: null,
   results: [],
   busy: false,
   pollTimer: null,
@@ -64,7 +82,7 @@ const state = {
   renderToken: 0,
 };
 
-let hooks = { openRemoteThread: () => {}, rerender: () => {} };
+let hooks = { openRemoteThread: () => {}, rerender: () => {}, openMessages: () => {} };
 
 /* -------------------------------- helpers -------------------------------- */
 
