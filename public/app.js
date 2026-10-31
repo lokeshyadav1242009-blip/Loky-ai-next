@@ -433,7 +433,7 @@ function buildHero() {
           <path d="M12 2.5 4 7v10l8 4.5 8-4.5V7l-8-4.5Z" stroke="url(#hg)" stroke-width="1.5" stroke-linejoin="round" />
           <path d="M12 8.2v7.6M8.4 10.2v3.6M15.6 10.2v3.6" stroke="url(#hg)" stroke-width="1.5" stroke-linecap="round" />
           <defs><linearGradient id="hg" x1="4" y1="3" x2="20" y2="21">
-            <stop stop-color="#8b7bff" /><stop offset="1" stop-color="#22d3ee" />
+            <stop stop-color="#19e68c" /><stop offset="1" stop-color="#34d399" />
           </linearGradient></defs>
         </svg>
       </div>
