@@ -66,7 +66,7 @@ test('the About dialog is wired to open and close', () => {
 
 test('the dark theme is preserved', () => {
   assert.match(html, /data-theme="dark"/);
-  assert.match(css, /--bg:\s*#08090f/);
+  assert.match(css, /--bg:\s*#030806/);
 });
 
 /* ---------------------------- opening animation -------------------------- */
