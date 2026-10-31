@@ -8,7 +8,13 @@
 ## source is not in the image yet at `npm install` time. So installs skip
 ## lifecycle scripts and the vendoring step is run explicitly after COPY.
 
-FROM node:20-alpine
+FROM node:20-alpine3.23
+
+# Security: the base image's OpenSSL (3.5.6-r0) is affected by
+# ALPINE-CVE-2026-34182, -63073 and -75803 (fixed in 3.5.7-r0 / 3.5.8-r0).
+# Pull only the OpenSSL libraries forward from the Alpine 3.23 repo (currently
+# 3.5.9-r0) so a stale cached base layer cannot ship the vulnerable version.
+RUN apk upgrade --no-cache libcrypto3 libssl3
 
 WORKDIR /app
 
