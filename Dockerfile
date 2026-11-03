@@ -17,6 +17,8 @@ WORKDIR /app
 ENV NODE_ENV=production
 
 # Dependencies first, so this layer is cached when only app code changes.
+COPY package.json package-lock.json ./
+
 # The apk upgrade runs in the same layer so the final image always carries the
 # distributor's patched OS packages (openssl/libssl/libcrypto and friends)
 # instead of whatever shipped in the base image.
