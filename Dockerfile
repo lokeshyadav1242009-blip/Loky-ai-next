@@ -8,7 +8,8 @@
 ## source is not in the image yet at `npm install` time. So installs skip
 ## lifecycle scripts and the vendoring step is run explicitly after COPY.
 
-FROM node:20-alpine
+# Supported Node LTS (krypton) on the current Alpine release.
+FROM node:24-alpine
 
 WORKDIR /app
 
@@ -16,8 +17,13 @@ WORKDIR /app
 ENV NODE_ENV=production
 
 # Dependencies first, so this layer is cached when only app code changes.
-COPY package.json package-lock.json ./
-RUN npm ci --omit=dev --ignore-scripts && npm cache clean --force
+# The apk upgrade runs in the same layer so the final image always carries the
+# distributor's patched OS packages (openssl/libssl/libcrypto and friends)
+# instead of whatever shipped in the base image.
+RUN apk upgrade --no-cache \
+ && apk add --no-cache --upgrade openssl libcrypto3 libssl3 \
+ && npm ci --omit=dev --ignore-scripts \
+ && npm cache clean --force
 
 # Copy only what the runtime needs. There is no .dockerignore support here, so
 # an explicit COPY list keeps the host's node_modules/.env/tests out of the
