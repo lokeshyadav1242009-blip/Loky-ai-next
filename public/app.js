@@ -27,6 +27,8 @@ import {
 import { initMessages, leaveMessages } from './messages.js';
 import { initProfileUI } from './direct-messages.js';
 import { initAuthGate } from './auth-gate.js';
+import { initFriendsUI } from './friends-ui.js';
+import { initAdminUI } from './admin-ui.js';
 
 
 const HEALTH_REFRESH_MS = 60000;

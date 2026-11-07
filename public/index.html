@@ -396,6 +396,40 @@
             <ul class="dm-results" id="dmResults" hidden></ul>
           </div>
 
+          <!-- Friend Requests: the only place a request can be accepted or
+               rejected. Nobody is ever added automatically. -->
+          <section class="dm-requests" id="dmRequests" hidden aria-label="Friend requests">
+            <header class="dm-requests__top">
+              <h2 class="dm-requests__title">Friend requests</h2>
+              <span class="dm-requests__tools">
+                <button class="msg-icon-btn" id="dmReqRefresh" type="button" aria-label="Refresh friend requests" title="Refresh">
+                  <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true">
+                    <path d="M20 12a8 8 0 1 1-2.6-5.9M20 4v4h-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+                  </svg>
+                </button>
+                <button class="msg-icon-btn" id="dmReqClose" type="button" aria-label="Close friend requests" title="Close">
+                  <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true">
+                    <path d="M6 6l12 12M18 6 6 18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" />
+                  </svg>
+                </button>
+              </span>
+            </header>
+
+            <p class="dm-notice" id="dmReqNotice" aria-live="polite" hidden></p>
+
+            <h3 class="dm-requests__group">Incoming</h3>
+            <ul class="dm-req-list" id="dmReqIncoming"></ul>
+            <p class="dm-empty" id="dmReqIncomingEmpty">No incoming requests.</p>
+
+            <h3 class="dm-requests__group">Sent</h3>
+            <ul class="dm-req-list" id="dmReqOutgoing"></ul>
+            <p class="dm-empty" id="dmReqOutgoingEmpty">No sent requests.</p>
+
+            <h3 class="dm-requests__group">Friends</h3>
+            <ul class="dm-req-list" id="dmReqFriends"></ul>
+            <p class="dm-empty" id="dmReqFriendsEmpty">No friends yet.</p>
+          </section>
+
           <form class="msg-newrow" id="msgNewRow" hidden autocomplete="off">
             <input
               class="msg-newrow__input"
