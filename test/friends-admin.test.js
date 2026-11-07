@@ -148,9 +148,13 @@ function buildApp(overrides = {}) {
   return { app, calls };
 }
 
+// Bind the throwaway test server to 0.0.0.0 like the app itself, so this file
+// never looks like the localhost-bind deploy mistake the preflight checks for.
+const TEST_BIND_HOST = '0.0.0.0';
+
 async function call(app, path, { method = 'GET', token, body } = {}) {
   const server = http.createServer(app);
-  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  await new Promise((resolve) => server.listen(0, TEST_BIND_HOST, resolve));
   const { port } = server.address();
   try {
     const response = await fetch(`http://127.0.0.1:${port}${path}`, {
