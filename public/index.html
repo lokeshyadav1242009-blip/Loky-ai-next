@@ -171,6 +171,19 @@
           aria-controls="messenger"
         >
           Messages
+          <span class="appnav__badge" id="navMessagesBadge" hidden>0</span>
+        </button>
+        <!-- Revealed only after the server confirms profiles.is_admin = true. -->
+        <button
+          class="appnav__tab appnav__tab--admin"
+          id="navAdmin"
+          type="button"
+          role="tab"
+          aria-selected="false"
+          aria-controls="adminPanel"
+          hidden
+        >
+          Admin
         </button>
       </div>
 
