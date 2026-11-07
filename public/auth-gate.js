@@ -99,6 +99,8 @@ function setBusy(busy) {
   if (el.gate) el.gate.dataset.busy = state.busy ? 'yes' : 'no';
 }
 
+import { closeLayer, openLayer, resetLayers } from './back-nav.js';
+
 /** Show exactly one screen inside the gate. */
 function setScreen(screen) {
   state.screen = screen;
@@ -121,6 +123,10 @@ function setScreen(screen) {
   if (screen === 'signin') focusIfDesktop(el.email);
   if (screen === 'signup') focusIfDesktop(el.displayName);
   if (screen === 'username') focusIfDesktop(el.usernameInput);
+
+  // Leaving Create Account (by Back or by tapping "Sign in") drops its entry,
+  // so history never keeps a dead signup step around.
+  if (screen !== 'signup') closeLayer('auth-signup');
 }
 
 /** Let the app through. */
@@ -129,6 +135,8 @@ function unlock() {
   document.body.classList.remove('auth-locked');
   state.screen = 'app';
   hooks.onUnlocked();
+  // A fresh session starts at the root; no gate step or panel survives it.
+  resetLayers();
   // Repaint the nav chip / profile from the same session we just verified.
   try {
     refreshAccount();
@@ -383,7 +391,13 @@ export function initAuthGate(nextHooks = {}) {
     el.signUp?.addEventListener('submit', submitSignUp);
     el.username?.addEventListener('submit', submitUsername);
 
-    el.goSignUp?.addEventListener('click', () => setScreen('signup'));
+    el.goSignUp?.addEventListener('click', () => {
+      setScreen('signup');
+      // Back from Create Account returns to Sign In instead of closing the app.
+      openLayer('auth-signup', () => {
+        if (state.screen !== 'app') setScreen('signin');
+      });
+    });
     el.goSignIn?.addEventListener('click', () => setScreen('signin'));
     el.usernameSignOut?.addEventListener('click', () => {
       signOutNow().catch(() => {});
