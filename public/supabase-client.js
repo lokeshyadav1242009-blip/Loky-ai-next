@@ -509,6 +509,14 @@ async function rpc(name, args = {}) {
   return rest(`rpc/${name}`, { method: 'POST', body: args });
 }
 
+/**
+ * Public wrapper so feature modules (friend requests, reports) reuse the exact
+ * same authenticated fetch, timeout handling and error mapping as Mini Chat.
+ */
+export async function callRpc(name, args = {}) {
+  return rpc(name, args);
+}
+
 /* -------------------------------- profiles -------------------------------- */
 
 /** The signed-in user's profile row, or null when they have not picked one. */
