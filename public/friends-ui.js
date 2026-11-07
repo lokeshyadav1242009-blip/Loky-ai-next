@@ -1,11 +1,15 @@
 /**
  * LOKY AI Next — Friend Requests UI.
  *
- * Lives inside the existing Messages screen. Nothing here touches the AI
- * assistant, the local conversation history or the Mini Chat thread view.
+ * Lives inside the existing Messages screen. It never touches the AI assistant,
+ * the local conversation history or the Mini Chat thread view.
  *
- * The database decides everything (duplicate requests, self-requests, who may
- * accept). This module only paints the result and keeps the badge fresh.
+ * The database decides everything (duplicates, self-requests, who may accept);
+ * this module only paints the result and keeps the badge fresh.
+ *
+ * Row shape from public.my_friend_requests():
+ *   request_id, direction, other_id, other_username, other_display_name,
+ *   other_avatar_seed, status, note, created_at, responded_at
  */
 
 import {
@@ -18,7 +22,13 @@ import {
   friendErrorCode,
   currentUserId,
 } from './friends-client.js';
-import { statusLabel, describeFriendError } from './friends-utils.js';
+import {
+  statusLabel,
+  describeFriendError,
+  groupRequests,
+  pendingIncomingCount,
+  friendButtonModel,
+} from './friends-utils.js';
 
 const POLL_MS = 7000;
 
@@ -27,8 +37,6 @@ const state = {
   outgoing: [],
   friends: [],
   notice: '',
-  noticeTone: 'info',
-  loading: false,
   open: false,
   timer: null,
   inflight: null,
@@ -64,7 +72,6 @@ function handleOf(name) {
 
 function setNotice(message, tone = 'info') {
   state.notice = message || '';
-  state.noticeTone = tone;
   if (!el.notice) return;
   el.notice.textContent = state.notice;
   el.notice.dataset.tone = tone;
@@ -131,10 +138,10 @@ function actionButton(label, { tone = 'ghost', onClick, key } = {}) {
   return button;
 }
 
-/* --------------------------------- counts --------------------------------- */
+/* --------------------------------- badges --------------------------------- */
 
 export function pendingCount() {
-  return state.incoming.length;
+  return state.incoming.filter((r) => r.status === 'pending').length;
 }
 
 function updateBadges() {
@@ -156,10 +163,7 @@ function updateBadges() {
       count ? `Friend requests, ${count} pending` : 'Friend requests'
     );
   }
-  // Surface new requests to the rest of the app (e.g. the nav) without polling.
-  window.dispatchEvent(
-    new CustomEvent('loky:friend-requests', { detail: { pending: count } })
-  );
+  window.dispatchEvent(new CustomEvent('loky:friend-requests', { detail: { pending: count } }));
 }
 
 /* -------------------------------- rendering -------------------------------- */
@@ -169,74 +173,98 @@ function renderRequests() {
 
   el.incoming.replaceChildren();
   el.outgoing.replaceChildren();
+  el.friends?.replaceChildren();
 
   for (const request of state.incoming) {
-    const sender = {
-      id: request.requester_id,
-      username: request.requester_username,
-      display_name: request.requester_display_name,
-      avatar_seed: request.requester_avatar_seed,
+    if (request.status !== 'pending') continue;
+    const person = {
+      id: request.other_id,
+      username: request.other_username,
+      display_name: request.other_display_name,
+      avatar_seed: request.other_avatar_seed,
     };
-
-    const accept = actionButton('Accept', {
-      tone: 'primary',
-      key: `accept:${request.id}`,
-      onClick: () => respond(request, 'accepted'),
-    });
-    const reject = actionButton('Reject', {
-      tone: 'ghost',
-      key: `reject:${request.id}`,
-      onClick: () => respond(request, 'rejected'),
-    });
-
     el.incoming.append(
-      personRow(sender, {
+      personRow(person, {
         meta: `Wants to be friends · ${statusLabel('pending')}`,
-        actions: [accept, reject],
+        actions: [
+          actionButton('Accept', {
+            tone: 'primary',
+            key: `accept:${request.request_id}`,
+            onClick: () => respond(request, 'accept'),
+          }),
+          actionButton('Reject', {
+            tone: 'ghost',
+            key: `reject:${request.request_id}`,
+            onClick: () => respond(request, 'reject'),
+          }),
+        ],
       })
     );
   }
 
   for (const request of state.outgoing) {
-    const target = {
-      id: request.recipient_id,
-      username: request.recipient_username,
-      display_name: request.recipient_display_name,
-      avatar_seed: request.recipient_avatar_seed,
+    if (request.status !== 'pending') continue;
+    const person = {
+      id: request.other_id,
+      username: request.other_username,
+      display_name: request.other_display_name,
+      avatar_seed: request.other_avatar_seed,
     };
-
-    const cancel = actionButton('Cancel', {
-      tone: 'ghost',
-      key: `cancel:${request.id}`,
-      onClick: () => cancel(request),
-    });
-
     el.outgoing.append(
-      personRow(target, {
+      personRow(person, {
         meta: `Request sent · ${statusLabel('pending')}`,
-        actions: [cancel],
+        actions: [
+          actionButton('Cancel', {
+            tone: 'ghost',
+            key: `cancel:${request.request_id}`,
+            onClick: () => cancel(request),
+          }),
+        ],
       })
     );
   }
 
-  if (el.incomingEmpty) el.incomingEmpty.hidden = state.incoming.length > 0;
-  if (el.outgoingEmpty) el.outgoingEmpty.hidden = state.outgoing.length > 0;
+  for (const friend of state.friends) {
+    const person = {
+      id: friend.user_id,
+      username: friend.username,
+      display_name: friend.display_name,
+      avatar_seed: friend.avatar_seed,
+    };
+    el.friends?.append(
+      personRow(person, {
+        meta: statusLabel('accepted'),
+        actions: [
+          actionButton('Message', {
+            tone: 'primary',
+            key: `msg:${friend.user_id}`,
+            onClick: () => state.hooks.openChatWith?.(person),
+          }),
+        ],
+      })
+    );
+  }
+
+  if (el.incomingEmpty) el.incomingEmpty.hidden = el.incoming.children.length > 0;
+  if (el.outgoingEmpty) el.outgoingEmpty.hidden = el.outgoing.children.length > 0;
+  if (el.friendsEmpty) el.friendsEmpty.hidden = (el.friends?.children.length || 0) > 0;
 }
 
 /* --------------------------------- actions -------------------------------- */
 
 async function respond(request, decision) {
   setNotice('');
+  const handle = handleOf(request.other_username);
   try {
-    await respondToFriendRequest(request.id, decision);
-    state.incoming = state.incoming.filter((r) => r.id !== request.id);
+    const result = await respondToFriendRequest(request.request_id, decision);
+    state.incoming = state.incoming.filter((r) => r.request_id !== request.request_id);
     renderRequests();
     updateBadges();
     setNotice(
-      decision === 'accepted'
-        ? `You and ${handleOf(request.requester_username)} are now friends.`
-        : `Request from ${handleOf(request.requester_username)} rejected.`,
-      decision === 'accepted' ? 'ok' : 'info'
+      result?.status === 'accepted'
+        ? `You and ${handle} are now friends.`
+        : `Request from ${handle} rejected.`,
+      result?.status === 'accepted' ? 'ok' : 'info'
     );
     await refresh({ silent: true });
   } catch (error) {
@@ -247,11 +275,12 @@ async function respond(request, decision) {
 
 async function cancel(request) {
   setNotice('');
+  const handle = handleOf(request.other_username);
   try {
-    await cancelFriendRequest(request.id);
-    state.outgoing = state.outgoing.filter((r) => r.id !== request.id);
+    await cancelFriendRequest(request.request_id);
+    state.outgoing = state.outgoing.filter((r) => r.request_id !== request.request_id);
     renderRequests();
-    setNotice(`Request to ${handleOf(request.recipient_username)} cancelled.`, 'info');
+    setNotice(`Request to ${handle} cancelled.`, 'info');
     await refresh({ silent: true });
   } catch (error) {
     setNotice(describeFriendError(friendErrorCode(error)), 'error');
@@ -260,12 +289,13 @@ async function cancel(request) {
 }
 
 /**
- * Add-friend control used by the Messages search results. It never adds anyone
- * directly: it sends a request and then shows the resulting status.
+ * The add-friend control used by the Messages search results. It never adds
+ * anyone directly: it sends a request, then shows the resulting status.
  */
-export async function mountFriendAction(container, person) {
+export async function mountFriendAction(container, person, hooks = {}) {
   if (!container || !person || !person.id) return;
-  if (person.id === currentUserId()) return;
+  const meId = currentUserId();
+  if (!meId || person.id === meId) return;
 
   const button = document.createElement('button');
   button.type = 'button';
@@ -278,34 +308,42 @@ export async function mountFriendAction(container, person) {
   try {
     status = await getFriendStatus(person.id);
   } catch {
-    status = 'unknown';
+    status = 'none';
   }
   paint(status);
 
   function paint(next) {
     status = next;
+    const model = friendButtonModel(next);
     button.dataset.status = next;
-    button.disabled = next === 'pending' || next === 'accepted' || next === 'unknown';
-    if (next === 'accepted') button.textContent = 'Friends';
-    else if (next === 'pending') button.textContent = 'Request sent';
-    else if (next === 'incoming') button.textContent = 'Respond in requests';
-    else if (next === 'unknown') button.textContent = 'Add friend';
-    else button.textContent = 'Add friend';
+    button.textContent = model.label;
+    button.disabled = model.disabled || model.action === 'cancel';
+    button.dataset.action = model.action || '';
   }
 
   button.addEventListener('click', async () => {
     if (button.disabled) return;
+
+    if (status === 'friends') {
+      hooks.onMessage?.();
+      return;
+    }
+    if (status === 'pending_in') {
+      openRequests();
+      return;
+    }
+
     button.disabled = true;
     button.textContent = 'Sending…';
     try {
-      const result = await sendFriendRequest(person.id);
-      paint(result === 'accepted' ? 'accepted' : 'pending');
+      await sendFriendRequest(person.id);
+      paint('pending_out');
       setNotice(`Friend request sent to ${handleOf(person.username)}.`, 'ok');
       await refresh({ silent: true });
     } catch (error) {
       const code = friendErrorCode(error);
-      if (code === 'request_pending') paint('pending');
-      else if (code === 'already_friends') paint('accepted');
+      if (code === 'request_pending') paint('pending_out');
+      else if (code === 'already_friends') paint('friends');
       else {
         button.disabled = false;
         button.textContent = 'Add friend';
@@ -319,9 +357,9 @@ export async function mountFriendAction(container, person) {
 
 function signatureOf() {
   return [
-    state.incoming.map((r) => r.id).join(','),
-    state.outgoing.map((r) => r.id).join(','),
-    state.friends.map((f) => f.id).join(','),
+    state.incoming.map((r) => `${r.request_id}:${r.status}`).join(','),
+    state.outgoing.map((r) => `${r.request_id}:${r.status}`).join(','),
+    state.friends.map((f) => f.user_id).join(','),
   ].join('|');
 }
 
@@ -341,24 +379,13 @@ export async function refresh({ silent = false } = {}) {
   if (state.inflight) return state.inflight;
 
   state.inflight = (async () => {
-    if (!silent) {
-      state.loading = true;
-      if (el.refresh) el.refresh.disabled = true;
-    }
+    if (el.refresh) el.refresh.disabled = true;
     try {
       const [requests, friends] = await Promise.all([listFriendRequests(), listFriends()]);
-      const incoming = Array.isArray(requests?.incoming) ? requests.incoming : [];
-      const outgoing = Array.isArray(requests?.outgoing) ? requests.outgoing : [];
-      const friendList = Array.isArray(friends) ? friends : [];
-
-      const changed =
-        incoming.length !== state.incoming.length ||
-        outgoing.length !== state.outgoing.length ||
-        friendList.length !== state.friends.length;
-
-      state.incoming = incoming;
-      state.outgoing = outgoing;
-      state.friends = friendList;
+      const grouped = groupRequests(requests, currentUserId());
+      state.incoming = grouped.incoming;
+      state.outgoing = grouped.outgoing;
+      state.friends = Array.isArray(friends) ? friends : [];
 
       const signature = signatureOf();
       if (signature !== state.lastSignature) {
@@ -366,18 +393,10 @@ export async function refresh({ silent = false } = {}) {
         renderRequests();
       }
       updateBadges();
-
-      // Someone accepted or rejected while this tab was open.
-      if (changed && state.open) {
-        const accepted = friendList.length > 0 && state.notice === '';
-        if (accepted) setNotice('Friend list updated.', 'info');
-      }
     } catch (error) {
-      const code = friendErrorCode(error);
-      if (!silent) setNotice(describeFriendError(code), 'error');
+      if (!silent) setNotice(describeFriendError(friendErrorCode(error)), 'error');
     } finally {
       state.inflight = null;
-      state.loading = false;
       if (el.refresh) el.refresh.disabled = false;
     }
   })();
@@ -390,6 +409,7 @@ function startPolling() {
   state.timer = setInterval(() => {
     if (document.visibilityState !== 'visible') return;
     if (!currentUserId()) return;
+    // Real-time-ish: a request accepted or rejected on another device lands here.
     refresh({ silent: true });
   }, POLL_MS);
 }
@@ -428,35 +448,36 @@ export function initFriendsUI(hooks = {}) {
   el.panel = document.getElementById('dmRequests');
   el.incoming = document.getElementById('dmReqIncoming');
   el.outgoing = document.getElementById('dmReqOutgoing');
+  el.friends = document.getElementById('dmReqFriends');
   el.incomingEmpty = document.getElementById('dmReqIncomingEmpty');
   el.outgoingEmpty = document.getElementById('dmReqOutgoingEmpty');
+  el.friendsEmpty = document.getElementById('dmReqFriendsEmpty');
   el.notice = document.getElementById('dmReqNotice');
   el.refresh = document.getElementById('dmReqRefresh');
   el.close = document.getElementById('dmReqClose');
 
-  if (el.requestsButton) el.requestsButton.addEventListener('click', toggleRequests);
-  if (el.close) el.close.addEventListener('click', closeRequests);
-  if (el.refresh) el.refresh.addEventListener('click', () => refresh());
+  el.requestsButton?.addEventListener('click', toggleRequests);
+  el.close?.addEventListener('click', closeRequests);
+  el.refresh?.addEventListener('click', () => refresh());
 
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible' && currentUserId()) refresh({ silent: true });
   });
 
   window.addEventListener('loky:auth-changed', (event) => {
-    const signedIn = event?.detail?.signedIn;
-    if (signedIn) {
+    if (event?.detail?.signedIn) {
       startPolling();
       refresh({ silent: true });
-    } else {
-      stopPolling();
-      state.incoming = [];
-      state.outgoing = [];
-      state.friends = [];
-      state.lastSignature = '';
-      renderRequests();
-      updateBadges();
-      closeRequests();
+      return;
     }
+    stopPolling();
+    state.incoming = [];
+    state.outgoing = [];
+    state.friends = [];
+    state.lastSignature = '';
+    renderRequests();
+    updateBadges();
+    closeRequests();
   });
 
   if (currentUserId()) {
@@ -464,5 +485,5 @@ export function initFriendsUI(hooks = {}) {
     startPolling();
   }
 
-  return { refresh, pendingCount, openRequests, closeRequests };
+  return { refresh, pendingCount, openRequests, closeRequests, pendingIncomingCount };
 }
