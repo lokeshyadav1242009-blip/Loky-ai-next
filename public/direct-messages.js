@@ -947,9 +947,28 @@ export function bootstrap({ force = false } = {}) {
 }
 
 function startProfileCheck() {
-  profileRequest = runBootstrap().finally(() => {
-    profileRequest = null;
-  });
+  profileRequest = runBootstrap()
+    .catch(() => {
+      // A throw anywhere in the check (not just inside its try block) must still
+      // produce a visible state: "Checking…" is never a resting state.
+      state.user = currentUser();
+      state.status = state.user ? 'error' : 'signed_out';
+      if (state.user && !state.authError) {
+        state.authError = 'Your profile could not be loaded. Tap Try again.';
+      }
+    })
+    .finally(() => {
+      if (state.status === 'loading' || state.status === 'unknown') {
+        state.user = currentUser();
+        state.status = state.user ? 'error' : 'signed_out';
+        if (state.user && !state.authError) {
+          state.authError = 'Your profile could not be loaded. Tap Try again.';
+        }
+      }
+      renderAccount();
+      renderChip();
+      profileRequest = null;
+    });
   return profileRequest;
 }
 

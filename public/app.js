@@ -26,7 +26,7 @@ import {
 } from './chat-utils.js';
 import { initMessages, leaveMessages } from './messages.js';
 import { initProfileUI } from './direct-messages.js';
-import { initAuthGate } from './auth-gate.js';
+import { initAuthGate, isUnlocked } from './auth-gate.js';
 import { initFriendsUI } from './friends-ui.js';
 import { initAdminUI } from './admin-ui.js';
 

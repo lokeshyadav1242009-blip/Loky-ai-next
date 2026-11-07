@@ -9,6 +9,7 @@ import { streamChat } from './providers.js';
 import { validateChatRequest } from './validate.js';
 import { createRateLimiter, rateLimitMiddleware } from './rateLimit.js';
 import { createAdminRouter } from './admin.js';
+import { requireAuth } from './auth.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const publicDir = path.resolve(__dirname, '..', 'public');

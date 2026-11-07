@@ -327,6 +327,11 @@ export async function signOutNow() {
 
 /* ------------------------------- entry points ----------------------------- */
 
+/** True only once the gate has verified a session and let the app through. */
+export function isUnlocked() {
+  return state.screen === 'app';
+}
+
 /** Open the sign-in screen (used by the profile dialog). */
 export function openAuthGate() {
   lock('signin');

@@ -121,7 +121,11 @@ function load() {
   if (raw) {
     try {
       const parsed = JSON.parse(raw);
-      state.threads = normalizeThreads(parsed && parsed.threads);
+      // Drop demo threads written by older builds: Messages must never show
+      // sample contacts next to this user's real conversations.
+      state.threads = normalizeThreads(parsed && parsed.threads).filter(
+        (thread) => !thread.demo && !String(thread.id || '').startsWith('demo_')
+      );
       state.activeId = parsed && typeof parsed.activeId === 'string' ? parsed.activeId : null;
     } catch {
       state.threads = [];
