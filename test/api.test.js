@@ -113,6 +113,13 @@ process.env.RATE_LIMIT_MAX = '3';
 process.env.RATE_LIMIT_WINDOW_MS = '60000';
 process.env.MAX_INPUT_CHARS = '2000';
 
+// This suite exercises chat behaviour, not the auth boundary (that lives in
+// test/auth-required.test.js). Clearing the Supabase credentials puts the chat
+// route in its "no project configured" state, so these tests do not need a
+// session. Enforcement itself is covered by the auth suite and verified live.
+process.env.SUPABASE_URL = '';
+process.env.SUPABASE_ANON_KEY = '';
+
 const { app } = await import('../server/index.js');
 
 const server = app.listen(0, TEST_BIND_HOST);
