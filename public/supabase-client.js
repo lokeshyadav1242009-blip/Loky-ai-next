@@ -23,14 +23,22 @@ let configPromise = null;
 
 /* --------------------------------- errors --------------------------------- */
 
+import { NETWORK_MESSAGES, classifyNetworkFailure } from './auth-errors.js';
+
 export class SupabaseError extends Error {
-  constructor(code, message, status = 0, retryAfter = 0) {
+  constructor(code, message, status = 0, retryAfter = 0, reason = '') {
     super(message);
     this.name = 'SupabaseError';
     this.code = code;
     this.status = status;
     /** Seconds the caller should wait before trying again (0 = unknown). */
     this.retryAfter = retryAfter;
+    /**
+     * Why a `network` failure happened: 'dns' | 'connection' | 'offline' |
+     * 'timeout'. Lets the UI distinguish a server-side outage from the user
+     * actually being offline instead of printing one catch-all message.
+     */
+    this.reason = reason;
   }
 }
 
