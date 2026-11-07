@@ -254,26 +254,71 @@ test('a stale or hostile signup intent is rejected', () => {
 
 /* ---------------------------- page wiring sanity --------------------------- */
 
-test('signup markup and identical field ids exist in the shipped page', async () => {
+test('the shipped page gates the app behind a full-screen auth screen', async () => {
   const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
 
-  // The ids direct-messages.js looks up must exist, or the form silently stalls.
+  // auth-gate.js looks these ids up; a missing one stalls that screen silently.
   for (const id of [
-    'dmEmail',
-    'dmPassword',
-    'dmSignIn',
-    'dmSignUp',
-    'dmSignupFields',
-    'dmUsernameNew',
-    'dmSignupHelp',
-    'authBanner',
+    'authGate',
+    'authChecking',
+    'authSignIn',
+    'authSignUp',
+    'authUsername',
+    'authEmail',
+    'authPassword',
+    'authSignInBtn',
+    'authGoSignUp',
+    'authDisplayName',
+    'authUsernameNew',
+    'authEmailNew',
+    'authPasswordNew',
+    'authSignUpBtn',
+    'authGoSignIn',
+    'authUsernameInput',
+    'authUsernameSave',
+    'authUsernameSignOut',
+    'authError',
+    'authNotice',
   ]) {
     assert.match(html, new RegExp(`id="${id}"`), `missing #${id}`);
   }
 
-  // The signup extras start hidden: existing users must never see them.
-  assert.match(html, /id="dmSignupFields"[^>]*hidden/);
+  // Sign in, create account and the username step are separate screens, and the
+  // gate itself starts on the checking screen so nothing can flash behind it.
+  assert.match(html, /id="authSignIn"[^>]*hidden/);
+  assert.match(html, /id="authSignUp"[^>]*hidden/);
+  assert.match(html, /id="authUsername"[^>]*hidden/);
   assert.match(html, /id="authBanner"[^>]*hidden/);
+});
+
+test('the Messages page carries no authentication UI', async () => {
+  const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
+
+  const from = html.indexOf('id="messenger"');
+  assert.ok(from > 0, 'Messages section is missing');
+  const messagesPage = html.slice(from, html.indexOf('id="profileDialog"'));
+
+  // Regression: these forms used to live inside Messages and must stay gone.
+  for (const gone of [
+    'dmAccount',
+    'dmSignedOut',
+    'dmSignedIn',
+    'dmEmail',
+    'dmPassword',
+    'dmSignIn',
+    'dmSignUp',
+    'dmSignOut',
+    'dmUsernameForm',
+    'dmUsernameNew',
+    'dmSignupFields',
+  ]) {
+    assert.ok(!messagesPage.includes(`id="${gone}"`), `Messages must not contain #${gone}`);
+  }
+
+  // The parts that belong there must survive.
+  for (const kept of ['dmFindForm', 'dmUserSearch', 'dmResults', 'dmNotice']) {
+    assert.ok(messagesPage.includes(`id="${kept}"`), `Messages is missing #${kept}`);
+  }
 });
 
 test('the browser layer handles redirects before loading the profile', async () => {
