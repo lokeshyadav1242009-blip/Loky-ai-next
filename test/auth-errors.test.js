@@ -76,3 +76,30 @@ test('a plain message is passed through and never becomes a network error', () =
   assert.equal(describeAuthError({ code: 'auth', message: 'Email not confirmed' }), 'Email not confirmed');
   assert.equal(describeAuthError(null), 'Something went wrong. Please try again.');
 });
+
+/* ---------------- server evidence refines the client's guess ---------------- */
+
+import { refineNetworkReason } from '../public/auth-errors.js';
+
+test('the server probe overrides an unknown browser failure with the real cause', () => {
+  const health = { authVerification: { reachable: false, reason: 'ENOTFOUND' } };
+  assert.equal(refineNetworkReason('unknown', health), 'dns');
+  // Even a client that thinks it is offline is overruled by server evidence.
+  assert.equal(refineNetworkReason('offline', health), 'dns');
+});
+
+test('an unreachable host that is not a DNS failure reads as a connection failure', () => {
+  const health = { authVerification: { reachable: false, reason: 'ECONNREFUSED' } };
+  assert.equal(refineNetworkReason('unknown', health), 'connection');
+});
+
+test('a server that can reach Supabase keeps the client-side reason', () => {
+  const health = { authVerification: { reachable: true, reason: null } };
+  assert.equal(refineNetworkReason('unknown', health), 'unknown');
+});
+
+test('a missing or malformed health payload changes nothing', () => {
+  assert.equal(refineNetworkReason('unknown', null), 'unknown');
+  assert.equal(refineNetworkReason('timeout', {}), 'timeout');
+  assert.equal(refineNetworkReason('offline', { authVerification: 'nope' }), 'offline');
+});
