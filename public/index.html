@@ -58,6 +58,73 @@
       </div>
     </div>
 
+    <!-- ---------------------------- auth gate ---------------------------- -->
+    <!-- Mandatory: nothing in the app is reachable without a session. The gate
+         is visible in the markup so a slow session check can never flash the
+         assistant; auth-gate.js hides it once a real session is verified. -->
+    <div class="authgate" id="authGate" role="dialog" aria-modal="true" aria-label="Sign in to LOKY AI">
+      <div class="authgate__aurora" aria-hidden="true"></div>
+      <div class="authgate__card">
+        <header class="authgate__brand">
+          <span class="authgate__mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="26" height="26" fill="none">
+              <path d="M12 2.5 4 7v10l8 4.5 8-4.5V7l-8-4.5Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" />
+              <path d="M12 7.2 8 9.5v5l4 2.3 4-2.3v-5L12 7.2Z" fill="currentColor" opacity=".55" />
+            </svg>
+          </span>
+          <span class="authgate__brandtext">
+            <span class="authgate__name">LOKY <em>AI</em></span>
+            <span class="authgate__credit">Created by Lokesh Yadav</span>
+          </span>
+        </header>
+
+        <div class="authgate__screen" id="authChecking">
+          <p class="authgate__lead">Checking your session…</p>
+          <div class="authgate__dots" aria-hidden="true"><span></span><span></span><span></span></div>
+        </div>
+
+        <form class="authgate__screen" id="authSignIn" hidden novalidate>
+          <h1 class="authgate__title">Welcome back</h1>
+          <p class="authgate__lead">Sign in to open your assistant and your chats.</p>
+          <label class="authgate__label" for="authEmail">Email</label>
+          <input class="authgate__input" id="authEmail" name="email" type="email" inputmode="email" autocomplete="email" placeholder="you@example.com" required />
+          <label class="authgate__label" for="authPassword">Password</label>
+          <input class="authgate__input" id="authPassword" name="password" type="password" autocomplete="current-password" placeholder="Your password" required />
+          <button class="btn btn--primary authgate__submit" id="authSignInBtn" type="submit">Sign in</button>
+          <p class="authgate__switch">New to LOKY AI? <button class="link-btn" id="authGoSignUp" type="button">Create account</button></p>
+        </form>
+
+        <form class="authgate__screen" id="authSignUp" hidden novalidate>
+          <h2 class="authgate__title">Create account</h2>
+          <p class="authgate__lead">One account for the assistant and for messaging people.</p>
+          <label class="authgate__label" for="authDisplayName">Display name</label>
+          <input class="authgate__input" id="authDisplayName" name="name" type="text" maxlength="60" autocomplete="name" placeholder="Lokesh Yadav" />
+          <label class="authgate__label" for="authUsernameNew">Username</label>
+          <input class="authgate__input" id="authUsernameNew" name="username" type="text" maxlength="20" autocomplete="nickname" autocapitalize="none" spellcheck="false" placeholder="your_username" required />
+          <p class="authgate__help" id="authSignupHelp">3–20 letters, numbers or _ — this is how people find you.</p>
+          <label class="authgate__label" for="authEmailNew">Email</label>
+          <input class="authgate__input" id="authEmailNew" name="email" type="email" inputmode="email" autocomplete="email" placeholder="you@example.com" required />
+          <label class="authgate__label" for="authPasswordNew">Password</label>
+          <input class="authgate__input" id="authPasswordNew" name="password" type="password" autocomplete="new-password" placeholder="At least 6 characters" required />
+          <button class="btn btn--primary authgate__submit" id="authSignUpBtn" type="submit">Create account</button>
+          <p class="authgate__switch">Already have an account? <button class="link-btn" id="authGoSignIn" type="button">Sign in</button></p>
+        </form>
+
+        <form class="authgate__screen" id="authUsername" hidden novalidate>
+          <h2 class="authgate__title">Pick your username</h2>
+          <p class="authgate__lead">This is how other people find you. It is saved to your profile once.</p>
+          <label class="authgate__label" for="authUsernameInput">Username</label>
+          <input class="authgate__input" id="authUsernameInput" name="username" type="text" maxlength="20" autocomplete="nickname" autocapitalize="none" spellcheck="false" placeholder="your_username" required />
+          <p class="authgate__help" id="authUsernameHelp">3–20 letters, numbers or _</p>
+          <button class="btn btn--primary authgate__submit" id="authUsernameSave" type="submit">Save username</button>
+          <p class="authgate__switch"><button class="link-btn" id="authUsernameSignOut" type="button">Sign out</button></p>
+        </form>
+
+        <p class="authgate__error" id="authError" role="alert" hidden></p>
+        <p class="authgate__notice" id="authNotice" aria-live="polite" hidden></p>
+      </div>
+    </div>
+
     <!-- ------------------------------ app nav ------------------------------ -->
     <!-- Simple switch between the AI assistant and the Messages section. The
          assistant stays mounted underneath, so nothing is ever lost when the
@@ -289,88 +356,9 @@
             </button>
           </header>
 
-          <!-- --------------------------- account / people --------------------------- -->
-          <!-- Optional: sign in to chat with other LOKY AI users. Everything below
-               stays usable signed-out, and local conversations are unaffected. -->
-          <div class="dm-account" id="dmAccount">
-            <div class="dm-account__block" id="dmSignedOut" hidden>
-              <p class="dm-account__lead">Sign in to chat with other LOKY AI users.</p>
-              <div class="dm-account__fields">
-                <input
-                  class="msg-newrow__input"
-                  id="dmEmail"
-                  type="email"
-                  placeholder="you@example.com"
-                  aria-label="Email"
-                  autocomplete="email"
-                />
-                <input
-                  class="msg-newrow__input"
-                  id="dmPassword"
-                  type="password"
-                  placeholder="Password"
-                  aria-label="Password"
-                  autocomplete="current-password"
-                />
-              </div>
-              <!-- Revealed on the first tap of "Create account": the account is
-                   created with the profile already chosen, so onboarding never
-                   asks for the same information twice. -->
-              <div class="dm-account__fields dm-account__fields--signup" id="dmSignupFields" hidden>
-                <input
-                  class="msg-newrow__input"
-                  id="dmDisplayName"
-                  type="text"
-                  maxlength="60"
-                  placeholder="Display name (optional)"
-                  aria-label="Display name"
-                  autocomplete="name"
-                />
-                <input
-                  class="msg-newrow__input"
-                  id="dmUsernameNew"
-                  type="text"
-                  maxlength="20"
-                  placeholder="username"
-                  aria-label="Username"
-                  autocomplete="nickname"
-                  autocapitalize="none"
-                  spellcheck="false"
-                />
-              </div>
-              <p class="dm-help" id="dmSignupHelp" hidden>
-                3–20 letters, numbers or _ — this is how people find you.
-              </p>
-              <div class="dm-account__actions">
-                <button class="btn btn--primary dm-btn" id="dmSignIn" type="button">Sign in</button>
-                <button class="btn dm-btn" id="dmSignUp" type="button">Create account</button>
-              </div>
-            </div>
-
-            <div class="dm-account__block" id="dmSignedIn" hidden>
-              <div class="dm-account__who">
-                <span class="dm-account__handle" id="dmWhoami"></span>
-                <button class="link-btn" id="dmSignOut" type="button">Sign out</button>
-              </div>
-              <p class="dm-account__email" id="dmWhoamiEmail"></p>
-              <form class="dm-account__username" id="dmUsernameForm" autocomplete="off">
-                <input
-                  class="msg-newrow__input"
-                  id="dmUsername"
-                  type="text"
-                  maxlength="20"
-                  placeholder="your_username"
-                  aria-label="Username"
-                />
-                <button class="btn btn--primary dm-btn" id="dmUsernameSave" type="submit">Create username</button>
-              </form>
-              <p class="dm-help" id="dmUsernameHelp">
-                Pick a username so people can find you. 3–20 letters, numbers or _
-              </p>
-            </div>
-
+          <!-- Messages stays account-free: signing in happens in the
+               full-screen gate, so this page only lists people and chats. -->
             <p class="dm-notice" id="dmNotice" aria-live="polite" hidden></p>
-          </div>
 
           <div class="dm-find" id="dmFind" hidden>
             <form class="dm-find__form" id="dmFindForm" autocomplete="off">

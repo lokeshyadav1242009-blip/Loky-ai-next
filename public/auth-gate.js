@@ -351,6 +351,7 @@ export function initAuthGate(nextHooks = {}) {
   el.passwordNew = document.getElementById('authPasswordNew');
   el.signUpBtn = document.getElementById('authSignUpBtn');
   el.goSignIn = document.getElementById('authGoSignIn');
+  el.signupHelp = document.getElementById('authSignupHelp');
 
   el.usernameInput = document.getElementById('authUsernameInput');
   el.usernameHelp = document.getElementById('authUsernameHelp');
