@@ -100,8 +100,8 @@ test('clear() forgets layers and the pending exit confirmation', () => {
   const stack = createBackStack({ now: clock });
 
   stack.push('sidebar', () => {});
-  assert.equal(stack.back().action, 'hint');
-  assert.equal(stack.back().action, 'exit');
+  assert.equal(stack.back().action, 'close', 'the open layer is closed first');
+  assert.equal(stack.back().action, 'hint', 'then the root asks for confirmation');
 
   stack.clear();
   assert.equal(stack.size(), 0);

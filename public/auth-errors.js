@@ -9,7 +9,7 @@
  */
 
 export const NETWORK_MESSAGES = {
-  dns: "The LOKY AI backend is running, but its authentication service can't be reached. This is a server-side problem, not your connection. Please try again shortly.",
+  dns: "Can't reach the LOKY AI server's authentication service. The backend itself is running — this is a server-side problem, not your connection. Please try again shortly.",
   connection: 'Could not connect to the LOKY AI server. Try again in a moment.',
   offline: "You're offline. Reconnect and try again.",
   timeout: 'The server took too long to answer. Try again.',
