@@ -11,8 +11,8 @@
  *
  * When a deployment has no Supabase configuration there is nothing to verify a
  * token against, and the app cannot sign anyone in either, so the route stays
- * open and /api/health reports auth_required:false. That is a visible
- * configuration state, not a bypass of a configured project.
+ * open. That is a visible configuration state, not a bypass of a configured
+ * project — and it is the only case in which requireAuth does not enforce.
  */
 
 import { config } from './config.js';

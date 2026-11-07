@@ -118,7 +118,7 @@ limiter.windowMs = config.limits.rateLimitWindowMs;
  *   data: {"type":"error",  code, message, hint, retryAfter}
  *   data: {"type":"done",  aborted}              final event on success
  */
-app.post('/api/chat', rateLimitMiddleware(limiter), async (req, res) => {
+app.post('/api/chat', rateLimitMiddleware(limiter), requireAuth, async (req, res) => {
   // 1. Fail fast with a helpful message when the server is not configured.
   if (!isConfigured(config)) {
     const missing = missingSettings(config);

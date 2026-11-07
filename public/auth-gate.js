@@ -435,8 +435,22 @@ export function initAuthGate(nextHooks = {}) {
   // The gate starts visible in the markup, so a slow or failed check can never
   // flash the assistant. The first real answer decides the screen.
   document.body.classList.add('auth-locked');
-  checkSession().catch(() => {
-    lock('signin');
-    setError('Could not check your session. Check your connection and try again.');
+
+  // Belt and braces: whatever the check chain does, the user must leave the
+  // "Checking your session…" screen within this budget.
+  const deadline = new Promise((resolve) => {
+    setTimeout(() => resolve('deadline'), SESSION_CHECK_DEADLINE_MS);
   });
+
+  Promise.race([checkSession(), deadline])
+    .then((result) => {
+      if (result === 'deadline' && state.screen === 'checking') {
+        lock('signin');
+        setError('Could not check your session. Check your connection and try again.');
+      }
+    })
+    .catch(() => {
+      lock('signin');
+      setError('Could not check your session. Check your connection and try again.');
+    });
 }

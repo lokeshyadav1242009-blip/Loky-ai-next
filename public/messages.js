@@ -642,17 +642,6 @@ function wire() {
     });
   }
 
-  if (el.emptySamples) {
-    el.emptySamples.addEventListener('click', () => {
-      const samples = sampleThreads();
-      const existing = new Set(state.threads.map((t) => t.id));
-      for (const sample of samples) {
-        if (!existing.has(sample.id)) state.threads.push(sample);
-      }
-      save();
-      render();
-    });
-  }
 
   if (el.back) el.back.addEventListener('click', backToList);
   if (el.rename) el.rename.addEventListener('click', beginRename);
