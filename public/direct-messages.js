@@ -169,22 +169,22 @@ function startCooldown(seconds, reason) {
   paint();
 }
 
-/** Turn any thrown thing into something a human can act on. */
+import { describeAuthError } from './auth-errors.js';
+
+/**
+ * Turn any thrown thing into something a human can act on.
+ *
+ * The mapping itself lives in auth-errors.js so it can be unit tested without a
+ * DOM; this wrapper only adds the `instanceof` check.
+ */
 export function describeError(error) {
   if (error instanceof SupabaseError) {
-    if (error.code === 'not_configured') {
-      return 'Mini Chat accounts are not configured on this server yet.';
-    }
-    if (error.code === 'migration_missing') {
-      return 'The Mini Chat database tables are missing. Apply supabase/migrations/0001_username_system.sql.';
-    }
-    if (error.code === 'signed_out') return 'Please sign in again.';
-    if (error.code === 'network') return 'Network problem. Check your connection and retry.';
-    if (error.code === 'username_taken') return 'That username is already taken. Try another one.';
-    if (error.code === 'email_unconfirmed') {
-      return 'This account still needs its email confirmed. Open the confirmation link we emailed you, then sign in.';
-    }
-    return error.message || 'Something went wrong.';
+    return describeAuthError({
+      code: error.code,
+      message: error.message,
+      status: error.status,
+      reason: error.reason,
+    });
   }
   return 'Something went wrong. Please try again.';
 }
