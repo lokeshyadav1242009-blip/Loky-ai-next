@@ -86,13 +86,17 @@ test('requests are split by direction and never include yourself', () => {
   const rows = [
     { id: '1', status: 'pending', direction: 'incoming', other_id: OTHER },
     { id: '2', status: 'accepted', direction: 'outgoing', other_id: OTHER },
-    { id: '3', status: 'pending', direction: 'incoming', other_id: ME },
   ];
-  const { incoming, outgoing } = groupRequests(rows, ME);
+  const { incoming, outgoing, pendingCount } = groupRequests(rows, ME);
   assert.equal(incoming.length, 1);
   assert.equal(outgoing.length, 1);
-  assert.equal(groupRequests(rows, ME).pendingCount, 2);
+  assert.equal(pendingCount, 1);
   assert.equal(pendingIncomingCount(rows), 1);
+
+  // A row that somehow refers to yourself must never be rendered as a contact.
+  const withSelf = [...rows, { id: '3', status: 'pending', direction: 'incoming', other_id: ME }];
+  assert.equal(groupRequests(withSelf, ME).incoming.length, 1);
+  assert.equal(groupRequests(withSelf, ME).pendingCount, 1);
 });
 
 test('statuses and errors are human readable', () => {
