@@ -16,12 +16,16 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { createRequireAuth } from '../server/auth.js';
+import { createRequireAuth, resolveSupabase } from '../server/auth.js';
+import { loadSupabase } from '../server/config.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = (file) => fs.readFileSync(path.join(root, file), 'utf8');
 
-const SUPABASE = { url: 'https://example.supabase.co', key: 'anon-publishable-key' };
+// A publishable-shaped JWT so loadSupabase() accepts it as a client key.
+const ANON_JWT =
+  'eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoiYW5vbiJ9.c2lnbmF0dXJl';
+const SUPABASE = { url: 'https://example.supabase.co', key: ANON_JWT };
 
 function fakeRes() {
   const res = { statusCode: 0, body: null };
@@ -35,6 +39,30 @@ function fakeRes() {
   };
   return res;
 }
+
+/* --------------------------- credential resolution --------------------------- */
+
+test('credentials resolve from the real loadSupabase() shape', () => {
+  const settings = loadSupabase({
+    SUPABASE_URL: 'https://example.supabase.co/',
+    SUPABASE_ANON_KEY: ANON_JWT,
+  });
+
+  assert.equal(settings.configured, true);
+
+  // This is the regression: the field is `key`, and reading `anonKey` used to
+  // make a configured deployment look unconfigured (silently open /api/chat).
+  assert.deepEqual(resolveSupabase(settings), {
+    url: 'https://example.supabase.co',
+    key: ANON_JWT,
+  });
+});
+
+test('no credentials resolve to null so the route can report the gap', () => {
+  assert.equal(resolveSupabase(null), null);
+  assert.equal(resolveSupabase({ url: 'https://example.supabase.co' }), null);
+  assert.equal(resolveSupabase({ key: ANON_JWT }), null);
+});
 
 /* --------------------------- server-side enforcement --------------------------- */
 
@@ -60,6 +88,25 @@ test('a configured project rejects a request with no bearer token', async () => 
       throw new Error('the token check must not run without a token');
     },
   });
+  const req = { headers: {} };
+  const res = fakeRes();
+  let passed = false;
+
+  await mw(req, res, () => {
+    passed = true;
+  });
+
+  assert.equal(passed, false);
+  assert.equal(res.statusCode, 401);
+  assert.equal(res.body.error.code, 'auth_required');
+});
+
+test('enforcement is active for the resolved config, not just injected objects', async () => {
+  const settings = loadSupabase({
+    SUPABASE_URL: 'https://example.supabase.co',
+    SUPABASE_ANON_KEY: ANON_JWT,
+  });
+  const mw = createRequireAuth({ getSupabase: () => resolveSupabase(settings) });
   const req = { headers: {} };
   const res = fakeRes();
   let passed = false;

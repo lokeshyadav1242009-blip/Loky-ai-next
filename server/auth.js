@@ -19,11 +19,24 @@ import { config } from './config.js';
 
 const VERIFY_TIMEOUT_MS = 8000;
 
-function supabaseSettings() {
-  const supabase = config && config.supabase ? config.supabase : null;
-  const url = supabase && supabase.url ? String(supabase.url).replace(/\/+$/, '') : '';
-  const key = supabase && supabase.anonKey ? String(supabase.anonKey) : '';
+/**
+ * Normalise configured Supabase credentials.
+ *
+ * `loadSupabase()` returns `{ url, key, configured }` — the field is `key`, not
+ * `anonKey`. Reading the wrong field returned null here, which silently sent a
+ * fully configured deployment down the "nothing to verify against" branch and
+ * let anonymous callers stream from /api/chat. Both spellings are accepted so
+ * the shape cannot regress silently again.
+ */
+export function resolveSupabase(supabase) {
+  if (!supabase) return null;
+  const url = supabase.url ? String(supabase.url).replace(/\/+$/, '') : '';
+  const key = String(supabase.key || supabase.anonKey || '');
   return url && key ? { url, key } : null;
+}
+
+function supabaseSettings() {
+  return resolveSupabase(config && config.supabase ? config.supabase : null);
 }
 
 /** True when this deployment can verify sessions. */
