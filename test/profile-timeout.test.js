@@ -121,7 +121,8 @@ test('a profile request that never settles fails as a network error', async (t) 
   const error = await pending;
   assert.ok(error instanceof SupabaseError, 'rejects with a SupabaseError');
   assert.equal(error.code, 'network');
-  assert.match(error.message, /timed out/i);
+  assert.equal(error.reason, 'timeout', 'the cause survives for the UI');
+  assert.match(error.message, /too long|timed out/i);
 });
 
 test('account state leaves "checking" after a timeout, then recovers on retry', async (t) => {
@@ -140,7 +141,7 @@ test('account state leaves "checking" after a timeout, then recovers on retry', 
 
   const afterTimeout = profileStatus();
   assert.equal(afterTimeout.status, 'error', 'checking must not survive a timeout');
-  assert.match(afterTimeout.error, /network|timed out/i);
+  assert.match(afterTimeout.error, /network|too long|timed out/i);
   assert.equal(afterTimeout.hasUser, true, 'the stored session is kept for a retry');
   assert.equal(afterTimeout.inFlight, false);
 

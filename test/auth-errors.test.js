@@ -33,7 +33,7 @@ test('an aborted request is classified as a timeout', () => {
 test('a DNS outage message does not blame the user connection', () => {
   const message = describeAuthError({ code: 'network', reason: 'dns' });
   assert.equal(message, NETWORK_MESSAGES.dns);
-  assert.match(message, /sign-in server/i);
+  assert.match(message, /LOKY AI server/i);
   assert.match(message, /server-side/i);
   assert.doesNotMatch(message, /check your connection/i);
 });

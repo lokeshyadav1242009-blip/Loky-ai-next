@@ -9,10 +9,10 @@
  */
 
 export const NETWORK_MESSAGES = {
-  dns: "Can't reach the LOKY AI sign-in server. The authentication service isn't responding right now — this is a server-side problem, not your connection.",
-  connection: 'Could not connect to the sign-in server. Try again in a moment.',
+  dns: "Can't reach the LOKY AI server. The backend isn't responding right now — this is a server-side problem, not your connection.",
+  connection: 'Could not connect to the LOKY AI server. Try again in a moment.',
   offline: "You're offline. Reconnect and try again.",
-  timeout: 'The sign-in server took too long to answer. Try again.',
+  timeout: 'The server took too long to answer. Try again.',
   unknown: 'Network problem. Check your connection and retry.',
 };
 
