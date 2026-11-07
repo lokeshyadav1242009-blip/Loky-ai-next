@@ -100,6 +100,8 @@ app.get('/api/supabase-config', (req, res) => {
   return res.json({ url, anonKey: key, configured: true });
 });
 
+app.use('/api/admin', createAdminRouter());
+
 const limiter = createRateLimiter({
   max: config.limits.rateLimitMax,
   windowMs: config.limits.rateLimitWindowMs,
