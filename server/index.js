@@ -56,8 +56,14 @@ const startedAt = Date.now();
  * model and to warn early when the server has no API key configured.
  * NOTE: only ever expose a boolean for the key - never the value.
  */
-app.get('/api/health', (req, res) => {
+import { probeAuthHost } from './auth-probe.js';
+
+app.get('/api/health', async (req, res) => {
   const ready = isConfigured(config);
+  // Session verification depends on the Supabase Auth host resolving. Report it
+  // so a paused project or a stale project ref is visible here instead of only
+  // showing up as an unexplained 503 from the chat endpoint.
+  const authVerification = await probeAuthHost(config.supabase);
   res.status(ready ? 200 : 503).json({
     status: ready ? 'ok' : 'unconfigured',
     provider: config.providerLabel,
@@ -67,6 +73,7 @@ app.get('/api/health', (req, res) => {
     configured: ready,
     missing: ready ? [] : missingSettings(config),
     uptimeSeconds: Math.round((Date.now() - startedAt) / 1000),
+    authVerification,
     limits: {
       rateLimitMax: config.limits.rateLimitMax,
       rateLimitWindowMs: config.limits.rateLimitWindowMs,
