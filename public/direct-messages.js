@@ -1291,3 +1291,11 @@ export function initProfileUI(nextHooks = {}) {
   renderProfile();
   startAuth();
 }
+
+/* The Friend Requests list can open a chat with a friend. app.js dispatches this
+   after switching to Messages, so openChatWith stays the single entry point and
+   the search/thread code is not duplicated. */
+window.addEventListener('loky:message-user', (event) => {
+  const person = event?.detail?.person;
+  if (person?.id) openChatWith(person, null);
+});
