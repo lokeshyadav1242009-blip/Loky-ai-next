@@ -21,7 +21,10 @@
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="stylesheet" href="./styles.css" />
   </head>
-  <body>
+  <!-- auth-locked is present in the markup on purpose: the shell must never be
+       painted, even for one frame, before a session has been verified. The gate
+       removes it only after the session check succeeds. -->
+  <body class="auth-locked">
     <a class="skip-link" href="#input">Skip to message box</a>
 
     <!-- ------------------------------ intro ------------------------------- -->

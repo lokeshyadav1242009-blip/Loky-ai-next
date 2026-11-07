@@ -909,8 +909,15 @@ let authStart = null;
 function startAuth() {
   if (!authStart) {
     authStart = (async () => {
-      const result = await handleAuthRedirect();
+      // The profile check must never wait behind redirect parsing. Consuming a
+      // confirmation link can be slow or fail, and awaiting it first left the
+      // account chip on "Checking…" (and the profile dialog on "Checking your
+      // session…") forever, because bootstrap() had not started yet.
+      const redirect = handleAuthRedirect().catch(() => ({ status: 'error' }));
+
       await bootstrap();
+
+      const result = await redirect;
       if (result.status === 'confirmed') await finishAuthRedirect(result);
     })().catch(() => {});
   }

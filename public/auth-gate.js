@@ -38,6 +38,16 @@ import { describeError, refreshAccount } from './direct-messages.js';
 
 const el = {};
 
+/**
+ * Hard deadline for the initial session check.
+ *
+ * Every network call already has its own budget, but the gate is the outermost
+ * boundary: if anything in the check chain failed to settle, the user would sit
+ * on "Checking your session…" with no way forward. After this long we stop
+ * waiting and show a retryable sign-in screen instead of a spinner.
+ */
+const SESSION_CHECK_DEADLINE_MS = 12000;
+
 const state = {
   /** 'checking' | 'signin' | 'signup' | 'username' | 'app' */
   screen: 'checking',

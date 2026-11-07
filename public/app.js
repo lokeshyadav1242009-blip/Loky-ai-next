@@ -1243,6 +1243,10 @@ let activeSection = 'assistant';
 
 function setSection(section) {
   const next = section === 'messages' ? 'messages' : 'assistant';
+  // Route guard: while the gate is locked, no section may be opened — not from
+  // a nav click, not from a deep link, not from a leftover hash. The server and
+  // RLS enforce this too; this only stops the UI from pretending otherwise.
+  if (!isUnlocked()) return;
   if (next === activeSection) return;
 
   activeSection = next;

@@ -128,10 +128,10 @@ function load() {
       state.activeId = null;
     }
   } else {
-    // First run: seed clearly-labelled demo conversations.
-    state.threads = sampleThreads();
+    // No seeding. Messages shows this signed-in user's real conversations only,
+    // so the honest first-run state is an empty list with an empty-state prompt.
+    state.threads = [];
     state.activeId = null;
-    save();
   }
 
   if (state.activeId && !state.threads.some((t) => t.id === state.activeId)) {
