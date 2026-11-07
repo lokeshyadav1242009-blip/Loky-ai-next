@@ -66,13 +66,7 @@ async function fetchWithTimeout(url, options = {}, ms = REQUEST_TIMEOUT_MS) {
   const timedOut = new Promise((_, reject) => {
     timer = setTimeout(() => {
       controller.abort();
-      reject(
-        new SupabaseError(
-          'network',
-          'The request timed out. Check your connection and try again.',
-          0
-        )
-      );
+      reject(new SupabaseError('network', NETWORK_MESSAGES.timeout, 0, 0, 'timeout'));
     }, ms);
   });
 
@@ -83,7 +77,10 @@ async function fetchWithTimeout(url, options = {}, ms = REQUEST_TIMEOUT_MS) {
     ]);
   } catch (error) {
     if (error instanceof SupabaseError) throw error;
-    throw new SupabaseError('network', 'Could not reach the server. Check your connection.');
+    // Keep the cause. A DNS/connection failure means the auth server is
+    // unreachable, which the UI must not report as the user being offline.
+    const reason = classifyNetworkFailure(error);
+    throw new SupabaseError('network', NETWORK_MESSAGES[reason] || NETWORK_MESSAGES.unknown, 0, 0, reason);
   } finally {
     if (timer !== null) clearTimeout(timer);
   }
