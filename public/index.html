@@ -580,6 +580,53 @@
       </div>
     </section>
 
+    <!-- ------------------------------ admin ------------------------------- -->
+    <!-- Only reachable for a server-verified administrator. The panel is hidden
+         by default and the API refuses every request without an admin token. -->
+    <section class="admin" id="adminPanel" hidden aria-label="Admin dashboard">
+      <header class="admin__top">
+        <h2 class="admin__title">Admin dashboard</h2>
+        <button class="msg-icon-btn" id="adminClose" type="button" aria-label="Close admin dashboard" title="Close">
+          <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true">
+            <path d="M6 6l12 12M18 6 6 18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" />
+          </svg>
+        </button>
+      </header>
+
+      <p class="dm-notice" id="adminNotice" aria-live="polite" hidden></p>
+
+      <div class="admin-stats" id="adminStats"></div>
+
+      <div class="admin-tabs" role="tablist" aria-label="Admin sections">
+        <button class="admin-tab" id="adminTabUsers" type="button" role="tab" data-admin-tab="users" aria-selected="true">Users</button>
+        <button class="admin-tab" id="adminTabReports" type="button" role="tab" data-admin-tab="reports" aria-selected="false">Reports</button>
+        <button class="admin-tab" id="adminTabLogs" type="button" role="tab" data-admin-tab="logs" aria-selected="false">Activity log</button>
+      </div>
+
+      <form class="admin-search" id="adminUserSearchForm" autocomplete="off">
+        <div class="admin-search__wrap" id="adminUserSearchWrap">
+          <input class="msg-newrow__input" id="adminUserSearch" type="text" placeholder="Search users by username or email" aria-label="Search users by username or email" />
+          <button class="msg-newrow__go" type="submit">Search</button>
+        </div>
+      </form>
+
+      <div class="admin-body" id="adminBody"></div>
+    </section>
+
+    <!-- Reason prompt: every privileged action needs a documented reason, which
+         is written to the immutable admin audit log. -->
+    <div class="admin-reason" id="adminReasonDialog" hidden role="dialog" aria-modal="true" aria-labelledby="adminReasonLabel">
+      <div class="admin-reason__card">
+        <p class="admin-reason__label" id="adminReasonLabel"></p>
+        <textarea class="admin-reason__text" id="adminReasonText" rows="3" maxlength="500" aria-label="Reason"></textarea>
+        <p class="admin-reason__error" id="adminReasonError" hidden></p>
+        <div class="admin-reason__actions">
+          <button class="btn btn--ghost btn--sm" id="adminReasonCancel" type="button">Cancel</button>
+          <button class="btn btn--primary btn--sm" id="adminReasonOk" type="button">Confirm</button>
+        </div>
+      </div>
+    </div>
+
     <!-- ------------------------------ about ------------------------------- -->
     <div class="about" id="aboutDialog" hidden>
       <div class="about__backdrop" id="aboutBackdrop"></div>

@@ -1346,6 +1346,17 @@ autoGrow();
    Messages. Failures stay local to the chip/dialog and never block the chat. */
 initProfileUI({ openMessages: () => setSection('messages') });
 
+/* Friend requests + admin dashboard. The Admin nav entry is revealed only after
+   the server confirms profiles.is_admin, and the API enforces it regardless of
+   what the browser shows. */
+initFriendsUI({
+  openChatWith: (person) => {
+    setSection('messages');
+    window.dispatchEvent(new CustomEvent('loky:message-user', { detail: { person } }));
+  },
+});
+initAdminUI();
+
 /* The auth gate is the outermost boundary: until it unlocks, the assistant and
    Messages stay behind it. Signing in lands on the assistant; signing out drops
    straight back to the sign-in screen. */
