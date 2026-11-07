@@ -433,6 +433,16 @@ async function accessToken() {
   }
 }
 
+/**
+ * Public accessor for the current access token. The admin API needs the raw
+ * token as a Bearer header; this reuses the same refresh path as every other
+ * request, so an almost-expired token is refreshed rather than failing.
+ * Throws code 'signed_out' when there is no session. Never logged.
+ */
+export async function getAccessToken() {
+  return accessToken();
+}
+
 /* -------------------------------- PostgREST ------------------------------- */
 
 async function rest(path, { method = 'GET', body, prefer, retry = true } = {}) {
