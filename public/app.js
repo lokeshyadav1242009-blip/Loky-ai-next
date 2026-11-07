@@ -26,6 +26,7 @@ import {
 } from './chat-utils.js';
 import { initMessages, leaveMessages } from './messages.js';
 import { initProfileUI } from './direct-messages.js';
+import { initAuthGate } from './auth-gate.js';
 
 
 const HEALTH_REFRESH_MS = 60000;
@@ -1342,6 +1343,14 @@ autoGrow();
    session and paint the nav chip + profile here, before the user opens
    Messages. Failures stay local to the chip/dialog and never block the chat. */
 initProfileUI({ openMessages: () => setSection('messages') });
+
+/* The auth gate is the outermost boundary: until it unlocks, the assistant and
+   Messages stay behind it. Signing in lands on the assistant; signing out drops
+   straight back to the sign-in screen. */
+initAuthGate({
+  onUnlocked: () => setSection('assistant'),
+  onLocked: () => setSection('assistant'),
+});
 
 // Opening animation — app open only, never on new chat / conversation switch.
 playIntro();

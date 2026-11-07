@@ -707,6 +707,9 @@ async function doSignOut() {
   renderResults();
   setStatus('Signed out.', 'info');
   hooks.rerender();
+
+  // Tell the auth gate, which owns the login screens, that the session is gone.
+  window.dispatchEvent(new CustomEvent('loky:auth-changed', { detail: { signedIn: false } }));
 }
 
 /* ---------------------------- auth redirects ----------------------------- */
@@ -1131,8 +1134,10 @@ export function stopRemotePolling() {
 export function initAccountUI(nextHooks = {}) {
   hooks = { ...hooks, ...nextHooks };
 
+  // The Messages page carries no sign-in block any more: authentication lives in
+  // the full-screen gate (auth-gate.js). Every element below is optional, so the
+  // people search and the conversation list keep working without #dmAccount.
   el.account = document.getElementById('dmAccount');
-  if (!el.account) return;
 
   el.signedOut = document.getElementById('dmSignedOut');
   el.email = document.getElementById('dmEmail');
