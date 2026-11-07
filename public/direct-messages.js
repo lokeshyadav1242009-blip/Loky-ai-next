@@ -475,12 +475,13 @@ function renderResults() {
 
     main.append(name, handle);
 
-    const action = document.createElement('button');
-    action.type = 'button';
-    action.className = 'btn btn--primary dm-result__action';
-    action.textContent = 'Chat';
-    action.addEventListener('click', () => {
-      openChatWith(person, action);
+    // Never add someone directly. The database turns this into a friend
+    // request, so the result row shows the real state (Add friend / Pending /
+    // Message) instead of silently creating a conversation.
+    const action = document.createElement('span');
+    action.className = 'dm-result__actions';
+    mountFriendAction(action, person, {
+      onMessage: () => openChatWith(person, action),
     });
 
     li.append(avatar, main, action);
