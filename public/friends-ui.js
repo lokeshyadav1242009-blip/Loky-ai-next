@@ -22,6 +22,7 @@ import {
   friendErrorCode,
   currentUserId,
 } from './friends-client.js';
+import { closeLayer, openLayer } from './back-nav.js';
 import {
   statusLabel,
   describeFriendError,

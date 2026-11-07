@@ -9,6 +9,7 @@
  */
 
 import { getAccessToken } from './supabase-client.js';
+import { closeLayer, openLayer } from './back-nav.js';
 
 const state = {
   tab: 'users',

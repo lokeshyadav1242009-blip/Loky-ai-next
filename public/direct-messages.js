@@ -16,6 +16,7 @@
  */
 
 import { displayUsername, normalizeUsername, validateUsername } from './username-utils.js';
+import { closeLayer, openLayer } from './back-nav.js';
 import { mountFriendAction } from './friends-ui.js';
 import {
   createSignupIntent,
