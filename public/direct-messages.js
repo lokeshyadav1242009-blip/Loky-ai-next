@@ -1254,6 +1254,7 @@ export function refreshAccount() {
 /* ------------------------- nav chip + profile dialog ---------------------- */
 
 function openProfile() {
+  openLayer('profile', closeProfile);
   if (!el.profileDialog) return;
 
   // Opening the dialog is the user's chance to recover from a check that never
@@ -1269,6 +1270,7 @@ function openProfile() {
 }
 
 function closeProfile() {
+  closeLayer('profile');
   if (!el.profileDialog) return;
   el.profileDialog.hidden = true;
   el.navAccount?.focus();

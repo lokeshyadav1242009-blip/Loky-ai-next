@@ -37,6 +37,7 @@ import {
   threadPreview,
 } from './messages-utils.js';
 import { formatRelativeTime, sanitizeTitle } from './chat-utils.js';
+import { closeLayer, openLayer } from './back-nav.js';
 import {
   describeError,
   initAccountUI,
@@ -161,6 +162,11 @@ function avatarNode(seed, name, small) {
 function setView(view) {
   state.view = view;
   if (el.messenger) el.messenger.dataset.view = view;
+
+  // An open conversation owns one history entry so Android Back returns to the
+  // chat list. Drafts live in state and are untouched by this.
+  if (view === 'thread') openLayer('msg-thread', backToList);
+  else closeLayer('msg-thread');
 }
 
 /* -------------------------------- rendering ------------------------------- */

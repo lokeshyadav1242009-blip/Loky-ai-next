@@ -524,6 +524,7 @@ export async function verifyAdminAccess() {
 }
 
 export async function openAdmin() {
+  openLayer('admin', closeAdmin);
   if (!el.panel) return;
   el.panel.hidden = false;
   state.open = true;
@@ -533,6 +534,7 @@ export async function openAdmin() {
 }
 
 export function closeAdmin() {
+  closeLayer('admin');
   if (!el.panel) return;
   el.panel.hidden = true;
   state.open = false;

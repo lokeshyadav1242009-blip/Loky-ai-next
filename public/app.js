@@ -29,6 +29,7 @@ import { initProfileUI } from './direct-messages.js';
 import { initAuthGate, isUnlocked } from './auth-gate.js';
 import { initFriendsUI } from './friends-ui.js';
 import { initAdminUI } from './admin-ui.js';
+import { EXIT_HINT, closeLayer, initBackNav, openLayer, resetLayers } from './back-nav.js';
 
 
 const HEALTH_REFRESH_MS = 60000;
@@ -1146,11 +1147,13 @@ function clearAll() {
 function openSidebar() {
   el.sidebar.classList.add('is-open');
   el.scrim.hidden = false;
+  openLayer('sidebar', closeSidebar);
 }
 
 function closeSidebar() {
   el.sidebar.classList.remove('is-open');
   el.scrim.hidden = true;
+  closeLayer('sidebar');
 }
 
 /* -------------------------------------------------------------------------- */
@@ -1252,6 +1255,11 @@ function setSection(section) {
   activeSection = next;
   const showMessages = next === 'messages';
 
+  // Messages is its own screen, so it owns a history entry: Back returns to the
+  // assistant instead of leaving the app.
+  if (showMessages) openLayer('messages', () => setSection('assistant'));
+  else closeLayer('messages');
+
   el.appShell.hidden = showMessages;
   el.messenger.hidden = !showMessages;
 
@@ -1272,11 +1280,13 @@ el.navMessages.addEventListener('click', () => setSection('messages'));
 
 function openAbout() {
   el.aboutDialog.hidden = false;
+  openLayer('about', closeAbout);
   el.aboutClose.focus();
 }
 
 function closeAbout() {
   el.aboutDialog.hidden = true;
+  closeLayer('about');
   el.aboutBtn.focus();
 }
 
@@ -1344,6 +1354,17 @@ if (!state.activeId && state.conversations.length > 0) {
 renderHistory();
 renderMessages();
 autoGrow();
+
+/* Android / browser Back: menus, dialogs and an open conversation each own one
+   history entry, so Back closes them first. At the root it asks for
+   confirmation instead of letting the page disappear on the first press. */
+initBackNav({ onHint: (message) => toast(message || EXIT_HINT) });
+
+/* Signing out must not leave a signed-in section or panel reachable by Back. */
+window.addEventListener('loky:auth-changed', (event) => {
+  const signedIn = event && event.detail ? event.detail.signedIn : undefined;
+  if (signedIn === false || !isUnlocked()) resetLayers();
+});
 
 /* Account state is page-wide, not a Messages-only detail: restore any stored
    session and paint the nav chip + profile here, before the user opens

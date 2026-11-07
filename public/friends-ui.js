@@ -422,12 +422,14 @@ function stopPolling() {
 /* ---------------------------------- panel --------------------------------- */
 
 export function openRequests() {
+  openLayer('friend-requests', closeRequests);
   state.open = true;
   if (el.panel) el.panel.hidden = false;
   refresh();
 }
 
 export function closeRequests() {
+  closeLayer('friend-requests');
   state.open = false;
   if (el.panel) el.panel.hidden = true;
 }
