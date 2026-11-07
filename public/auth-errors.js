@@ -38,6 +38,25 @@ export function classifyNetworkFailure(error) {
 }
 
 /**
+ * A browser cannot see why a fetch failed — Chrome only reports "Failed to
+ * fetch" — so the client's own guess is often just 'unknown'. The server can
+ * actually probe Supabase, so prefer its evidence: if the server cannot reach
+ * the auth host, the outage is server-side no matter how good the user's
+ * connection is.
+ *
+ * @param {string} reason the client-side classification
+ * @param {any} health the /api/health payload (may be null)
+ * @returns {string} the reason to report
+ */
+export function refineNetworkReason(reason, health) {
+  const verification = health && health.authVerification;
+  if (!verification || verification.reachable !== false) return reason;
+  return /ENOTFOUND|EAI_AGAIN|NXDOMAIN/i.test(String(verification.reason || ''))
+    ? 'dns'
+    : 'connection';
+}
+
+/**
  * Turn an auth failure into something the user can act on.
  * @param {{code?: string, message?: string, status?: number, reason?: string}} error
  */

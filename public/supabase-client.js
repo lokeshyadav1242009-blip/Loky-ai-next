@@ -23,7 +23,7 @@ let configPromise = null;
 
 /* --------------------------------- errors --------------------------------- */
 
-import { NETWORK_MESSAGES, classifyNetworkFailure } from './auth-errors.js';
+import { NETWORK_MESSAGES, classifyNetworkFailure, refineNetworkReason } from './auth-errors.js';
 
 export class SupabaseError extends Error {
   constructor(code, message, status = 0, retryAfter = 0, reason = '') {
@@ -39,6 +39,32 @@ export class SupabaseError extends Error {
      * actually being offline instead of printing one catch-all message.
      */
     this.reason = reason;
+  }
+}
+
+/**
+ * Ask our own server whether it can reach Supabase.
+ *
+ * Best effort and bounded: a browser cannot see why a fetch failed, so the
+ * server's probe is the only real evidence. Never throws.
+ */
+async function readAuthHealth() {
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 2500);
+    try {
+      const response = await fetch('/api/health', {
+        signal: controller.signal,
+        cache: 'no-store',
+        headers: { Accept: 'application/json' },
+      });
+      if (!response.ok) return null;
+      return await response.json();
+    } finally {
+      clearTimeout(timer);
+    }
+  } catch {
+    return null;
   }
 }
 
@@ -79,7 +105,12 @@ async function fetchWithTimeout(url, options = {}, ms = REQUEST_TIMEOUT_MS) {
     if (error instanceof SupabaseError) throw error;
     // Keep the cause. A DNS/connection failure means the auth server is
     // unreachable, which the UI must not report as the user being offline.
-    const reason = classifyNetworkFailure(error);
+    let reason = classifyNetworkFailure(error);
+    // Browsers hide the cause behind "Failed to fetch"; ask our own server
+    // whether *it* can reach Supabase before blaming the user's connection.
+    if (reason === 'unknown' || reason === 'offline') {
+      reason = refineNetworkReason(reason, await readAuthHealth());
+    }
     throw new SupabaseError('network', NETWORK_MESSAGES[reason] || NETWORK_MESSAGES.unknown, 0, 0, reason);
   } finally {
     if (timer !== null) clearTimeout(timer);
