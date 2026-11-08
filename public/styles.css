@@ -3689,16 +3689,24 @@ body.auth-locked #messenger {
 }
 
 /* --- reason prompt ------------------------------------------------------ */
+/* Closed by default. Visibility is owned by JS: askReason() in admin-ui.js is
+   the only opener and toggles `.is-open`. Keeping the closed state in this base
+   rule means the prompt cannot paint on launch even before its handlers are
+   bound, and the buttons are always wired before it can ever be shown. */
 .admin-reason {
   position: fixed;
   inset: 0;
   z-index: 70;
-  display: grid;
+  display: none;
   place-items: center;
   padding: 18px;
   background: rgba(1, 4, 3, 0.72);
   backdrop-filter: blur(4px);
   animation: dmPanelIn 140ms ease-out both;
+}
+
+.admin-reason.is-open {
+  display: grid;
 }
 
 .admin-reason__card {

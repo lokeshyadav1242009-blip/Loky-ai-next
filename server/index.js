@@ -215,7 +215,11 @@ app.use(
     etag: true,
     maxAge: '1h',
     setHeaders(res, filePath) {
-      if (filePath.endsWith('.html')) {
+      // HTML, CSS and JS carry the app's behaviour, so they must revalidate on
+      // every load. A one-hour max-age previously left phones running a stale
+      // stylesheet or script after a fix shipped, which looked like the fix had
+      // never deployed. Images and other assets keep the cacheable max-age.
+      if (/\.(html|css|js)$/i.test(filePath)) {
         res.setHeader('Cache-Control', 'no-cache');
       }
     },

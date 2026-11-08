@@ -88,29 +88,73 @@ function askReason(promptText, { min = 5, confirmLabel = 'Confirm' } = {}) {
       resolve(null);
       return;
     }
+    // Never stack prompts: settle any previous one as cancelled first.
+    if (state.reasonResolver) closeReasonDialog(null);
+
+    state.reasonMin = min;
+    state.reasonResolver = resolve;
+
     el.reasonLabel.textContent = promptText;
     el.reasonText.value = '';
     el.reasonError.hidden = true;
     el.reasonOk.textContent = confirmLabel;
     el.reasonDialog.hidden = false;
+    el.reasonDialog.classList.add('is-open');
     el.reasonText.focus();
+  });
+}
 
-    state.reasonResolver = (value) => {
-      state.reasonResolver = null;
-      el.reasonDialog.hidden = true;
-      resolve(value);
-    };
+/** Close the prompt and settle the pending action (null means cancelled). */
+function closeReasonDialog(value) {
+  if (!el.reasonDialog) return;
+  const resolve = state.reasonResolver;
+  state.reasonResolver = null;
+  el.reasonDialog.classList.remove('is-open');
+  el.reasonDialog.hidden = true;
+  if (el.reasonText) el.reasonText.value = '';
+  if (el.reasonError) el.reasonError.hidden = true;
+  if (typeof resolve === 'function') resolve(value);
+}
 
-    el.reasonOk.onclick = () => {
-      const value = el.reasonText.value.trim();
-      if (value.length < min) {
-        el.reasonError.textContent = `Please write at least ${min} characters.`;
-        el.reasonError.hidden = false;
-        return;
-      }
-      state.reasonResolver?.(value);
-    };
-    el.reasonCancel.onclick = () => state.reasonResolver?.(null);
+/** Validate the typed reason, then let the privileged action run. */
+function confirmReasonDialog() {
+  if (!state.reasonResolver) return;
+  const value = el.reasonText.value.trim();
+  const min = state.reasonMin ?? 5;
+  if (value.length < min) {
+    el.reasonError.textContent = `Please write at least ${min} characters.`;
+    el.reasonError.hidden = false;
+    el.reasonText.focus();
+    return;
+  }
+  closeReasonDialog(value);
+}
+
+/**
+ * Bind the prompt's controls exactly once, at boot. The buttons must respond
+ * however the dialog came to be on screen: Cancel closes it, Confirm validates
+ * and resolves the action, Escape and a backdrop tap cancel.
+ */
+function bindReasonDialog() {
+  if (!el.reasonDialog || el.reasonDialog.dataset.reasonBound === 'true') return;
+  el.reasonDialog.dataset.reasonBound = 'true';
+
+  el.reasonOk?.addEventListener('click', confirmReasonDialog);
+  el.reasonCancel?.addEventListener('click', () => closeReasonDialog(null));
+  el.reasonDialog.addEventListener('click', (event) => {
+    if (event.target === el.reasonDialog) closeReasonDialog(null);
+  });
+  el.reasonDialog.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      closeReasonDialog(null);
+    }
+  });
+  el.reasonText?.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
+      event.preventDefault();
+      confirmReasonDialog();
+    }
   });
 }
 
@@ -561,10 +605,11 @@ export function initAdminUI() {
   el.reasonOk = document.getElementById('adminReasonOk');
   el.reasonCancel = document.getElementById('adminReasonCancel');
 
-  // The reason prompt exists only for privileged actions. Force it closed on
-  // boot so nothing (a restored attribute, a stylesheet or a future refactor)
-  // can leave an empty text field sitting over the app at startup.
-  if (el.reasonDialog) el.reasonDialog.hidden = true;
+  // The reason prompt exists only for privileged actions. Wire its buttons now
+  // (so Cancel/Confirm always respond) and guarantee it starts closed, so an
+  // empty text field can never sit over the app at launch.
+  bindReasonDialog();
+  closeReasonDialog(null);
 
   el.close?.addEventListener('click', closeAdmin);
   el.tabUsers?.addEventListener('click', () => loadUsers(el.userSearch?.value || ''));
