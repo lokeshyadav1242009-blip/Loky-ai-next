@@ -3778,3 +3778,21 @@ body.auth-locked #messenger {
     transform: none;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   Hidden-state normalization (startup dialog fix)
+   ---------------------------------------------------------------------------
+   Every panel and dialog in this app is opened and closed through the `hidden`
+   attribute. A component rule that also sets `display` (grid/flex) outranks the
+   user-agent `[hidden] { display: none }`, which left the admin "reason" dialog
+   (.admin-reason, display: grid) permanently visible over the app: a full-screen
+   overlay holding an empty textarea that appeared on every launch, signed in or
+   not. The dialogs themselves were never the bug — their closed state was.
+
+   Making `hidden` authoritative restores the intended behaviour for the whole
+   class of overlays (.admin-reason, .admin-panel, .profile, .friends, ...) so a
+   closed dialog can never paint, intercept taps or pop a keyboard again.
+   --------------------------------------------------------------------------- */
+[hidden] {
+  display: none !important;
+}

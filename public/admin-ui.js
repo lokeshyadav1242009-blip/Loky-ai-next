@@ -561,6 +561,11 @@ export function initAdminUI() {
   el.reasonOk = document.getElementById('adminReasonOk');
   el.reasonCancel = document.getElementById('adminReasonCancel');
 
+  // The reason prompt exists only for privileged actions. Force it closed on
+  // boot so nothing (a restored attribute, a stylesheet or a future refactor)
+  // can leave an empty text field sitting over the app at startup.
+  if (el.reasonDialog) el.reasonDialog.hidden = true;
+
   el.close?.addEventListener('click', closeAdmin);
   el.tabUsers?.addEventListener('click', () => loadUsers(el.userSearch?.value || ''));
   el.tabReports?.addEventListener('click', loadReports);
