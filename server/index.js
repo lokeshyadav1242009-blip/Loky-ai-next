@@ -289,6 +289,30 @@ if (process.env.NODE_ENV !== 'test') {
           'The UI will explain this instead of failing silently.',
       );
     }
+
+    // Name the authentication root cause in the log at boot, instead of leaving
+    // it to be reconstructed from user reports. Only public project data (host
+    // and ref) is printed - never the key.
+    probeAuthHost(config.supabase)
+      .then((verification) => {
+        if (!verification || verification.reachable !== false) return;
+        const where = verification.projectRef
+          ? `project ${verification.projectRef} at ${verification.host}`
+          : verification.host;
+        console.warn(
+          `[warn] Supabase Auth unreachable (${where}): ${verification.reason}. ` +
+            'Sign-in will fail until this is resolved.',
+        );
+        if (verification.cause === 'project_missing') {
+          console.warn(
+            '[warn] That project host does not resolve in DNS, so the project was deleted or replaced. ' +
+              'Restore or recreate it, point SUPABASE_URL and SUPABASE_ANON_KEY at it, then redeploy.',
+          );
+        }
+      })
+      .catch(() => {
+        /* the probe never throws; never let logging block startup */
+      });
   });
 
   const shutdown = (signal) => {

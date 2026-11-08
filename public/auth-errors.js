@@ -55,6 +55,9 @@ export function classifyNetworkFailure(error) {
 export function refineNetworkReason(reason, health) {
   const verification = health && health.authVerification;
   if (!verification || verification.reachable !== false) return reason;
+  // The server can tell a deleted project apart from a transient outage; prefer
+  // that over the client's guess so the user is not told to keep retrying.
+  if (verification.cause === 'project_missing') return 'project_missing';
   return /ENOTFOUND|EAI_AGAIN|NXDOMAIN/i.test(String(verification.reason || ''))
     ? 'dns'
     : 'connection';
