@@ -10,6 +10,10 @@
 
 export const NETWORK_MESSAGES = {
   dns: "Can't reach the LOKY AI server's authentication service. The backend itself is running — this is a server-side problem, not your connection. Please try again shortly.",
+  // Worse than a temporary outage: the auth project is gone, so retrying can
+  // never work and the user must not be told to keep trying.
+  project_missing:
+    "LOKY AI's sign-in project can't be found — it appears to have been deleted or replaced. The site owner needs to restore it before anyone can sign in. Retrying won't help until then.",
   connection: 'Could not connect to the LOKY AI server. Try again in a moment.',
   offline: "You're offline. Reconnect and try again.",
   timeout: 'The server took too long to answer. Try again.',

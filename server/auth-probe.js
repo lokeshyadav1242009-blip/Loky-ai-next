@@ -16,6 +16,52 @@ import { resolveSupabase } from './auth.js';
 const TTL_MS = 60_000;
 const TIMEOUT_MS = 2_500;
 
+/**
+ * A deleted Supabase project stops resolving in DNS entirely (NXDOMAIN), while a
+ * paused one still resolves and answers with 5xx. Those need different advice:
+ * one is transient, the other needs the owner to restore or replace the project.
+ * Reporting both as "network problem, try again" sent users into a retry loop
+ * that could never succeed.
+ */
+const MISSING_HOST = /ENOTFOUND|EAI_AGAIN|NXDOMAIN|ERR_NAME_NOT_RESOLVED|getaddrinfo/i;
+
+/**
+ * @param {string} reason the raw DNS/network failure code
+ * @returns {'project_missing'|'timeout'|'refused'|'unreachable'}
+ */
+export function classifyAuthCause(reason) {
+  const text = String(reason || '');
+  if (MISSING_HOST.test(text)) return 'project_missing';
+  if (/abort|timed?\s?out|ETIMEDOUT/i.test(text)) return 'timeout';
+  if (/ECONNREFUSED|ECONNRESET|EHOSTUNREACH|ENETUNREACH/i.test(text)) return 'refused';
+  return 'unreachable';
+}
+
+/**
+ * Which Supabase project this server is bound to.
+ *
+ * The ref is public: it is already part of SUPABASE_URL and of the publishable
+ * key's JWT claims. Naming it is what lets an owner see at a glance which
+ * project is configured. No key material is returned.
+ */
+export function projectRefFrom(settings) {
+  if (!settings) return '';
+  const parts = String(settings.key || '').split('.');
+  if (parts.length === 3) {
+    try {
+      const claims = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8'));
+      if (claims && claims.ref) return String(claims.ref);
+    } catch {
+      /* not a JWT — fall back to the host */
+    }
+  }
+  try {
+    return new URL(settings.url).host.split('.')[0] || '';
+  } catch {
+    return '';
+  }
+}
+
 let cache = { key: '', at: 0, value: null };
 
 /**
@@ -34,6 +80,7 @@ export async function probeAuthHost(supabase, { fetchImpl, now = Date.now } = {}
     value = { configured: false, reachable: null };
   } else {
     const host = new URL(settings.url).host;
+    const projectRef = projectRefFrom(settings);
     const doFetch = fetchImpl || globalThis.fetch;
     const started = Date.now();
 
@@ -48,17 +95,33 @@ export async function probeAuthHost(supabase, { fetchImpl, now = Date.now } = {}
       value = {
         configured: true,
         host,
+        projectRef,
         reachable: true,
         status: response && response.status ? response.status : 0,
         ms: Date.now() - started,
       };
     } catch (error) {
-      const cause = error && error.cause ? error.cause.code || error.cause.message : '';
+      const reason = String(
+        (error && error.cause ? error.cause.code || error.cause.message : '') ||
+          (error && error.name) ||
+          'fetch_failed'
+      );
+      const cause = classifyAuthCause(reason);
       value = {
         configured: true,
         host,
+        projectRef,
         reachable: false,
-        reason: String(cause || (error && error.name) || 'fetch_failed'),
+        reason,
+        cause,
+        ...(cause === 'project_missing'
+          ? {
+              hint:
+                'This Supabase project does not resolve in DNS, which means it was deleted or replaced. ' +
+                'Restore or recreate the project, point SUPABASE_URL and SUPABASE_ANON_KEY at it, then redeploy. ' +
+                'Retrying sign-in cannot succeed until that is done.',
+            }
+          : {}),
         ms: Date.now() - started,
       };
     }
