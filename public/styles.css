@@ -3786,3 +3786,27 @@ body.auth-locked #messenger {
     transform: none;
   }
 }
+
+/* --- closed state for JS-toggled containers ------------------------------
+   These elements are shown/hidden by setting the `hidden` attribute, but each
+   one sets its own `display` value, which outranks the browser's built-in
+   [hidden] rule. Without these, a panel is painted on launch even though the
+   markup and the JS both say it is closed. This is the same convention already
+   used above by .app[hidden], .about[hidden] and .messenger[hidden]. */
+.admin[hidden],
+.admin-reason[hidden],
+.dm-find[hidden],
+.dm-results[hidden],
+.intro[hidden],
+.intro__mark[hidden],
+.authgate__mark[hidden],
+.authgate__dots[hidden],
+.appnav__mark[hidden],
+.appnav__avatar[hidden],
+.brand__mark[hidden],
+.msg-avatar[hidden],
+.msg__avatar[hidden],
+.about__mark[hidden],
+.profile__avatar[hidden] {
+  display: none;
+}
