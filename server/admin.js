@@ -61,6 +61,28 @@ function fail(status, code, message) {
 }
 
 /**
+ * Why a read-only panel has no data. These are shown to the owner verbatim, so
+ * they say what is missing instead of implying the dashboard is broken.
+ */
+const UNAVAILABLE_MESSAGES = {
+  db_admin_flag_missing:
+    'Not configured: the database admin functions require profiles.is_admin = true for this account. The server verified your Super Admin UUID, but the SQL functions re-check that flag themselves.',
+  rpc_not_configured: 'Not configured: the required database function is not installed.',
+  session_invalid: 'Not configured: the database rejected the session token.',
+  upstream_unavailable: 'Not configured: the database did not answer.',
+};
+
+/** Database refusal -> a reason the dashboard can state honestly. */
+function classifyDbFailure(error) {
+  const code = String(error?.code || '');
+  const message = String(error?.message || '');
+  if (message === 'not_authorized' || code === 'not_authorized') return 'db_admin_flag_missing';
+  if (message === 'not_authenticated' || code === 'not_authenticated') return 'session_invalid';
+  if (code === 'PGRST202' || /could not find the function/i.test(message)) return 'rpc_not_configured';
+  return 'upstream_unavailable';
+}
+
+/**
  * Build the admin router. Dependencies are injectable so the authorization
  * logic can be unit tested without network access or a live Supabase project.
  */
@@ -134,6 +156,31 @@ export function createAdminRouter(deps = {}) {
   // into a response body.
   const serviceRole = deps.serviceRole || config.serviceRole || { key: '', configured: false };
 
+  /**
+   * Read-only RPC. A refused or missing function becomes "Not configured" for
+   * that panel instead of a failed request, so one unavailable metric cannot
+   * blank the whole dashboard. Writes keep raising real errors: a refused
+   * action must be visible to the owner.
+   */
+  async function softRpc(name, args, token) {
+    try {
+      const data = await callRpc(name, args, token);
+      return { ok: true, data };
+    } catch (error) {
+      return { ok: false, reason: classifyDbFailure(error) };
+    }
+  }
+
+  function unavailable(res, reason, message) {
+    res.json({
+      ok: true,
+      available: false,
+      reason,
+      message: message || UNAVAILABLE_MESSAGES[reason] || UNAVAILABLE_MESSAGES.upstream_unavailable,
+      data: null,
+    });
+  }
+
   router.use(requireAdmin);
 
   // --- routes --------------------------------------------------------------
@@ -146,20 +193,26 @@ export function createAdminRouter(deps = {}) {
         isAdmin: true,
         isSuperAdmin: true,
         superAdminConfigured: true,
+        // Reads go through SECURITY DEFINER RPCs, so the privileged key is
+        // optional. Deletion is the one action that still needs it and stays
+        // disabled until that is implemented securely.
+        deletionEnabled: serviceRole.configured === true,
         serviceRoleConfigured: serviceRole.configured === true,
       },
     });
   });
 
   router.get('/stats', asyncHandler(async (req, res) => {
-    const data = await callRpc('admin_dashboard_stats', {}, req.accessToken);
-    res.json({ ok: true, data });
+    const result = await softRpc('admin_dashboard_stats', {}, req.accessToken);
+    if (!result.ok) return unavailable(res, result.reason);
+    res.json({ ok: true, available: true, data: result.data });
   }));
 
   router.get('/users', asyncHandler(async (req, res) => {
     const term = typeof req.query.q === 'string' ? req.query.q.slice(0, 80) : '';
-    const data = await callRpc('admin_search_users', { term }, req.accessToken);
-    res.json({ ok: true, data: Array.isArray(data) ? data : [] });
+    const result = await softRpc('admin_search_users', { term }, req.accessToken);
+    if (!result.ok) return unavailable(res, result.reason);
+    res.json({ ok: true, available: true, data: Array.isArray(result.data) ? result.data : [] });
   }));
 
   router.post('/users/:id/status', asyncHandler(async (req, res) => {
@@ -176,8 +229,9 @@ export function createAdminRouter(deps = {}) {
   router.get('/reports', asyncHandler(async (req, res) => {
     const raw = typeof req.query.status === 'string' ? req.query.status : '';
     const statusFilter = VALID_REPORT_STATUSES.has(raw) ? raw : null;
-    const data = await callRpc('admin_list_reports', { status_filter: statusFilter }, req.accessToken);
-    res.json({ ok: true, data: Array.isArray(data) ? data : [] });
+    const result = await softRpc('admin_list_reports', { status_filter: statusFilter }, req.accessToken);
+    if (!result.ok) return unavailable(res, result.reason);
+    res.json({ ok: true, available: true, data: Array.isArray(result.data) ? result.data : [] });
   }));
 
   router.post('/reports/:id', asyncHandler(async (req, res) => {
@@ -201,8 +255,13 @@ export function createAdminRouter(deps = {}) {
 
   router.get('/audit', asyncHandler(async (req, res) => {
     const limit = Number.parseInt(String(req.query.limit || '50'), 10);
-    const data = await callRpc('admin_audit_logs', { max_rows: Number.isFinite(limit) ? Math.min(Math.max(limit, 1), 200) : 50 }, req.accessToken);
-    res.json({ ok: true, data: Array.isArray(data) ? data : [] });
+    const result = await softRpc(
+      'admin_audit_logs',
+      { max_rows: Number.isFinite(limit) ? Math.min(Math.max(limit, 1), 200) : 50 },
+      req.accessToken,
+    );
+    if (!result.ok) return unavailable(res, result.reason);
+    res.json({ ok: true, available: true, data: Array.isArray(result.data) ? result.data : [] });
   }));
 
   // --- server-only helpers -------------------------------------------------
@@ -319,11 +378,46 @@ export function createAdminRouter(deps = {}) {
         maintenance: maintenanceSnapshot(),
         superAdmin: { configured: superAdminIds.length > 0, userId: req.admin.id },
         serviceRole: { configured: serviceRole.configured === true },
+        dataAccess: {
+          mode: 'authenticated-rpc',
+          privilegedKeyRequired: false,
+          deletionEnabled: serviceRole.configured === true,
+        },
       },
     });
   }));
 
   router.get('/analytics', asyncHandler(async (req, res) => {
+    // Totals come from the SECURITY DEFINER RPC the overview already uses, so no
+    // privileged key is needed for the numbers that matter. The 14-day time
+    // series has no RPC, so without the optional key it is reported as
+    // unavailable rather than invented from a partial read.
+    const rpc = await softRpc('admin_dashboard_stats', {}, req.accessToken);
+    if (!rpc.ok) return unavailable(res, rpc.reason);
+
+    if (serviceRole.configured !== true) {
+      const s = rpc.data || {};
+      return res.json({
+        ok: true,
+        available: true,
+        data: {
+          totals: {
+            users: s.totalUsers ?? null,
+            activeUsers: s.activeUsers ?? null,
+            suspendedUsers: s.suspendedUsers ?? null,
+            deactivatedUsers: s.deactivatedUsers ?? null,
+            conversations: s.totalConversations ?? null,
+            messages: s.totalMessages ?? null,
+            pendingFriendRequests: s.pendingFriendRequests ?? null,
+            openReports: s.openReports ?? null,
+          },
+          series: null,
+          seriesAvailable: false,
+          generatedAt: s.generatedAt || null,
+        },
+      });
+    }
+
     requireServiceRole();
     const now = Date.now();
     const dayStart = new Date();
@@ -369,6 +463,16 @@ export function createAdminRouter(deps = {}) {
   // stays behind admin_review_conversation, which requires a written reason and
   // writes an audit entry.
   router.get('/conversations', asyncHandler(async (req, res) => {
+    // Listing every conversation is a cross-user read and no RPC exists for it.
+    // Without the optional server key this says so, instead of rendering an
+    // empty list that would read as "there are no conversations".
+    if (serviceRole.configured !== true) {
+      return unavailable(
+        res,
+        'rpc_not_configured',
+        'Not configured: listing every conversation needs a database function that is not installed. Reviewing a reported conversation still works from Reports.',
+      );
+    }
     requireServiceRole();
     const { ok, json } = await serviceFetch(
       '/rest/v1/conversations?select=id,created_at,conversation_members(count),messages(count)&order=created_at.desc&limit=200',
@@ -391,8 +495,12 @@ export function createAdminRouter(deps = {}) {
     const on = req.body?.on === true;
     const reason = String(req.body?.reason || '').trim().slice(0, 300);
     const snapshot = setMaintenance({ on, reason, updatedBy: req.admin.id });
-    // Best effort: the toggle still applies if the audit write is refused.
+    // Best effort: the toggle still applies if the audit write is refused. With
+    // no privileged key the audit table is not writable from the app, so the
+    // response says the change was not audited instead of implying it was.
+    let audited = false;
     try {
+      if (serviceRole.configured !== true) throw new Error('audit_needs_key');
       const { ok } = await serviceFetch('/rest/v1/admin_audit_log', {
         method: 'POST',
         prefer: 'return=minimal',
@@ -406,11 +514,12 @@ export function createAdminRouter(deps = {}) {
           },
         ],
       });
+      audited = ok === true;
       if (!ok) console.error('[admin] maintenance audit write rejected');
     } catch {
       console.error('[admin] maintenance audit write failed');
     }
-    res.json({ ok: true, data: snapshot });
+    res.json({ ok: true, data: { ...snapshot, audited } });
   }));
 
   // Deleting an account is irreversible, so it demands a written reason, refuses
@@ -427,7 +536,15 @@ export function createAdminRouter(deps = {}) {
     if (targetId.toLowerCase() === String(req.admin.id).toLowerCase()) {
       throw fail(403, 'cannot_delete_self', 'You cannot delete your own account.');
     }
-    requireServiceRole();
+    // Deletion is irreversible and cannot be done safely without a privileged
+    // server-side path, so it stays switched off rather than half-working.
+    if (serviceRole.configured !== true) {
+      throw fail(
+        403,
+        'deletion_disabled',
+        'Account deletion is disabled until a secure server-side implementation is configured. Suspend the account instead.',
+      );
+    }
 
     const { ok, json } = await serviceFetch(
       `/rest/v1/profiles?id=eq.${encodeURIComponent(targetId)}&select=id,username,is_admin`,
