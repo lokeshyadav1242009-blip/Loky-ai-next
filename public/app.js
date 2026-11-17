@@ -1446,14 +1446,27 @@ initFriendsUI({
     window.dispatchEvent(new CustomEvent('loky:message-user', { detail: { person } }));
   },
 });
-initAdminUI();
+const adminUI = initAdminUI();
 
 /* The auth gate is the outermost boundary: until it unlocks, the assistant and
    Messages stay behind it. Signing in lands on the assistant; signing out drops
-   straight back to the sign-in screen. */
+   straight back to the sign-in screen.
+
+   The admin dashboard is told about the session here, directly. It used to
+   depend on a `loky:auth-changed` event, but the only code that dispatched one
+   was the sign-out path, so a signed-in visit to /admin never got verified and
+   fell through to the assistant. Calling syncAdmin() avoids that gap, and
+   avoids re-entering the gate (whose own listener re-runs checkSession on a
+   signed-in event). */
 initAuthGate({
-  onUnlocked: () => setSection('assistant'),
-  onLocked: () => setSection('assistant'),
+  onUnlocked: () => {
+    setSection('assistant');
+    adminUI?.syncAdmin?.({ signedIn: true }).catch(() => {});
+  },
+  onLocked: () => {
+    setSection('assistant');
+    adminUI?.syncAdmin?.({ signedIn: false }).catch(() => {});
+  },
 });
 
 // Opening animation — app open only, never on new chat / conversation switch.
