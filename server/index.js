@@ -10,6 +10,7 @@ import { validateChatRequest } from './validate.js';
 import { createRateLimiter, rateLimitMiddleware } from './rateLimit.js';
 import { createAdminRouter } from './admin.js';
 import { requireAuth } from './auth.js';
+import { isMaintenanceOn, maintenanceSnapshot } from './maintenance.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const publicDir = path.resolve(__dirname, '..', 'public');
@@ -74,6 +75,7 @@ app.get('/api/health', async (req, res) => {
     missing: ready ? [] : missingSettings(config),
     uptimeSeconds: Math.round((Date.now() - startedAt) / 1000),
     authVerification,
+    maintenance: maintenanceSnapshot(),
     limits: {
       rateLimitMax: config.limits.rateLimitMax,
       rateLimitWindowMs: config.limits.rateLimitWindowMs,
@@ -108,6 +110,19 @@ app.get('/api/supabase-config', (req, res) => {
   return res.json({ url, anonKey: key, configured: true });
 });
 
+/**
+ * GET /admin
+ *
+ * Deep link for the dashboard. This serves the ordinary app shell, which holds
+ * no admin data: the browser then asks /api/admin/session and the SERVER
+ * decides. A normal user is shown the Access Denied view and never the panel,
+ * and every /api/admin/* call they make still returns 403.
+ */
+app.get('/admin', (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  res.sendFile(path.join(publicDir, 'index.html'));
+});
+
 app.use('/api/admin', createAdminRouter());
 
 const limiter = createRateLimiter({
@@ -126,6 +141,17 @@ limiter.windowMs = config.limits.rateLimitWindowMs;
  *   data: {"type":"done",  aborted}              final event on success
  */
 app.post('/api/chat', rateLimitMiddleware(limiter), requireAuth, async (req, res) => {
+  // 0. Maintenance mode pauses the assistant without calling the provider.
+  if (isMaintenanceOn()) {
+    return res.status(503).json({
+      error: {
+        code: 'maintenance',
+        message: 'LOKY AI is briefly paused for maintenance. Please try again shortly.',
+        retryable: true,
+      },
+    });
+  }
+
   // 1. Fail fast with a helpful message when the server is not configured.
   if (!isConfigured(config)) {
     const missing = missingSettings(config);
