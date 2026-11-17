@@ -264,7 +264,16 @@ function renderUsers() {
       // Permanent deletion always requires a typed reason and is audited.
       // Admins (including the Super Admin) never get a delete control, and the
       // server refuses those deletions even if a request is forged by hand.
-      actions.append(adminButton('Delete', 'danger', () => deleteUser(user)));
+      const deleteBtn = adminButton('Delete', 'danger', () => deleteUser(user));
+      if (!state.deletionEnabled) {
+        // Deletion needs a secure server-side path that is not configured yet.
+        // The server refuses it too, so the button is visibly disabled rather
+        // than failing only after the owner has typed a reason.
+        deleteBtn.disabled = true;
+        deleteBtn.title =
+          'Account deletion is disabled until a secure server-side implementation is configured.';
+      }
+      actions.append(deleteBtn);
     }
 
     li.append(main, status, actions);
@@ -518,6 +527,8 @@ function describeAdminError(error) {
     rate_limited: 'Too many admin requests. Wait a minute and try again.',
     user_not_found: 'That user no longer exists.',
     report_not_found: 'That report no longer exists.',
+    deletion_disabled:
+      'Account deletion is disabled until a secure server-side implementation is configured. Suspend the account instead.',
   };
   return map[error?.code] || error?.message || 'The admin request failed.';
 }
@@ -527,6 +538,11 @@ async function loadStats() {
     state.stats = await api('/stats');
     renderStats();
   } catch (error) {
+    if (error.notConfigured) {
+      state.stats = null;
+      renderStats();
+      return;
+    }
     setNotice(describeAdminError(error), 'error');
   }
 }
@@ -538,6 +554,13 @@ async function loadUsers(term = '') {
     syncTabs();
     renderUsers();
   } catch (error) {
+    if (error.notConfigured) {
+      state.users = [];
+      state.tab = 'users';
+      syncTabs();
+      if (el.body) el.body.replaceChildren(emptyState(error.message));
+      return;
+    }
     setNotice(describeAdminError(error), 'error');
   }
 }
