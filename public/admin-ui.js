@@ -10,6 +10,7 @@
 
 import { getAccessToken } from './supabase-client.js';
 import { closeLayer, openLayer } from './back-nav.js';
+import { canonicalAdminPath, isAdminRoute } from './admin-route.js';
 
 const state = {
   tab: 'users',
@@ -1040,8 +1041,27 @@ async function adminSession() {
   }
 }
 
+/* /admin and anything nested under it (/admin/admin, /admin/users/<id>) are the
+   same screen, never a second route. isAdminRoute() owns that rule so it can be
+   unit-tested without a DOM; this wrapper only reads the live URL.
+
+   The previous exact comparison (=== '/admin') was the bug: a nested admin path
+   never matched, so the dashboard was never mounted and the assistant showed. */
 function isAdminPath() {
-  return window.location.pathname.replace(/\/+$/, '') === '/admin';
+  return isAdminRoute(window.location.pathname);
+}
+
+/* Collapse a nested admin URL onto the single canonical route, so the address
+   bar cannot grow /admin/admin/admin and the dashboard stays one route. A
+   failure here is cosmetic: the dashboard renders on either path. */
+function canonicaliseAdminPath() {
+  const target = canonicalAdminPath();
+  if (window.location.pathname.replace(/\/+$/, '') === target) return;
+  try {
+    window.history.replaceState(window.history.state, '', target);
+  } catch {
+    /* keep the nested path; the panel is mounted regardless */
+  }
 }
 
 function showAdminDenied() {
@@ -1078,8 +1098,12 @@ export async function syncAdmin({ signedIn = true } = {}) {
     if (isAdmin) {
       hideAdminDenied();
       el.navAdmin?.removeAttribute('hidden');
-      // A deep link to /admin opens the dashboard only after the server agrees.
-      if (isAdminPath()) await openAdmin();
+      // A deep link to /admin, or any nested /admin/* path, opens the dashboard
+      // only after the server agrees.
+      if (isAdminPath()) {
+        canonicaliseAdminPath();
+        await openAdmin();
+      }
       return true;
     }
 
