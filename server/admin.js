@@ -1,5 +1,12 @@
 import express from 'express';
 import { config } from './config.js';
+import {
+  parseSuperAdminIds,
+  superAdminDecision,
+  canDeleteUser,
+  SUPER_ADMIN_ENV,
+} from './superadmin.js';
+import { maintenanceSnapshot, setMaintenance } from './maintenance.js';
 
 /**
  * LOKY AI Next — admin API.
@@ -83,8 +90,21 @@ export function createAdminRouter(deps = {}) {
 
     const profile = await loadProfile(user.id, token);
     if (!profile) throw fail(403, 'no_profile', 'No profile for this account.');
-    if (profile.is_admin !== true) throw fail(403, 'not_admin', 'Administrator access required.');
-    if (profile.status !== 'active') throw fail(403, 'account_inactive', 'This account is not active.');
+
+    // The single authorization decision shared by every admin route.
+    // profiles.is_admin alone is NOT enough: the UUID must also be the
+    // configured owner, so flipping that flag cannot hand out the dashboard.
+    const decision = superAdminDecision({
+      userId: user.id,
+      isAdmin: profile.is_admin === true,
+      status: profile.status,
+      allowList: superAdminIds,
+    });
+    if (!decision.ok) {
+      const denied = fail(decision.status, decision.code, decision.message);
+      if (decision.hint) denied.hint = decision.hint;
+      throw denied;
+    }
 
     req.admin = { id: user.id, email: user.email || '', username: profile.username || '' };
     req.accessToken = token;
@@ -104,11 +124,31 @@ export function createAdminRouter(deps = {}) {
     next();
   });
 
+  // Super Admin allow-list: the owner's Supabase Auth UUID, server-side only.
+  // Read from the environment at boot so the browser can never influence it.
+  // An empty list is not "allow everyone" — superAdminDecision fails closed.
+  const superAdminIds = deps.superAdminIds || parseSuperAdminIds(process.env[SUPER_ADMIN_ENV]);
+
+  // Server-only key for cross-user aggregates and account deletion. It is the
+  // only credential that bypasses RLS, so it is used here and never serialised
+  // into a response body.
+  const serviceRole = deps.serviceRole || config.serviceRole || { key: '', configured: false };
+
   router.use(requireAdmin);
 
   // --- routes --------------------------------------------------------------
   router.get('/session', (req, res) => {
-    res.json({ ok: true, data: { userId: req.admin.id, username: req.admin.username, isAdmin: true } });
+    res.json({
+      ok: true,
+      data: {
+        userId: req.admin.id,
+        username: req.admin.username,
+        isAdmin: true,
+        isSuperAdmin: true,
+        superAdminConfigured: true,
+        serviceRoleConfigured: serviceRole.configured === true,
+      },
+    });
   });
 
   router.get('/stats', asyncHandler(async (req, res) => {
@@ -177,7 +217,10 @@ export function createAdminRouter(deps = {}) {
     const code = error.code || error.message || 'upstream_error';
     const safe = status >= 500 ? 'The admin service is temporarily unavailable.' : String(error.message || 'Request failed.');
     if (status >= 500) console.error('[admin] upstream failure', code);
-    res.status(status).json({ ok: false, error: { code, message: safe } });
+    res.status(status).json({
+      ok: false,
+      error: { code, message: safe, ...(error.hint ? { hint: error.hint } : {}) },
+    });
   });
 
   return router;
