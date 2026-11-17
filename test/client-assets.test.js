@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { isAssetPath } from '../server/asset-path.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const pub = (name) => fs.readFileSync(path.join(root, 'public', name), 'utf8');
@@ -154,7 +155,7 @@ test('app.js wires the section switch without unmounting the assistant', () => {
 });
 
 test('the Messages client module is loaded as an ES module', () => {
-  assert.match(html, /<script type="module" src="\.\/app\.js">/);
+  assert.match(html, /<script type="module" src="\/app\.js">/);
   assert.match(js, /from '\.\/messages\.js'/);
   assert.match(messagesJs, /from '\.\/messages-utils\.js'/);
 });
@@ -246,6 +247,33 @@ test('no API key or secret literal is embedded in the frontend', () => {
 
 test('the frontend still uses only local assets (no CDN)', () => {
   assert.ok(!/https?:\/\/(unpkg|cdn|jsdelivr|cdnjs)/i.test(html));
-  assert.match(html, /src="\.\/app\.js"/);
-  assert.match(html, /href="\.\/styles\.css"/);
+  assert.match(html, /src="\/app\.js"/);
+  assert.match(html, /href="\/styles\.css"/);
+});
+
+/* ------------------------------- asset paths ------------------------------ */
+
+test('the shell loads its assets from root-absolute URLs', () => {
+  // A relative "./styles.css" resolves to /admin/styles.css on a nested route,
+  // where the SPA fallback answers with HTML: unstyled page, dead scripts.
+  assert.match(html, /href="\/styles\.css"/);
+  assert.match(html, /src="\/app\.js"/);
+  assert.match(html, /href="\/manifest\.webmanifest"/);
+  assert.ok(
+    !/(?:src|href)="\.\/[^"]*\.(?:css|js|svg|webmanifest|png|jpe?g|woff2?)"/i.test(html),
+    'no relative asset URLs may remain in the shell',
+  );
+});
+
+test('asset-looking paths are recognised so the shell is never served for them', () => {
+  assert.equal(isAssetPath('/styles.css'), true);
+  assert.equal(isAssetPath('/admin/styles.css'), true);
+  assert.equal(isAssetPath('/vendor/supabase.min.js'), true);
+  assert.equal(isAssetPath('/favicon.svg'), true);
+  // Routes must keep receiving the shell.
+  assert.equal(isAssetPath('/admin'), false);
+  assert.equal(isAssetPath('/admin/'), false);
+  assert.equal(isAssetPath('/messages/abc-123'), false);
+  assert.equal(isAssetPath('/'), false);
+  assert.equal(isAssetPath(''), false);
 });
