@@ -267,11 +267,18 @@ test('the Super Admin reaches the dashboard session', async () => {
   });
 });
 
-test('analytics refuse to fabricate numbers without a service-role key', async () => {
+test('analytics use the RPC and never fabricate numbers without a service-role key', async () => {
   await withApp(async (base) => {
     const { status, payload } = await call(base, '/api/admin/analytics', { token: 'owner' });
-    assert.equal(status, 503);
-    assert.equal(payload.error.code, 'service_role_required');
+    // No privileged key is required: the caller's own token reaches the
+    // SECURITY DEFINER function, which returns only what it really computed.
+    assert.equal(status, 200);
+    assert.equal(payload.available, true);
+    assert.equal(payload.data.totals.users, 3);
+    // No RPC exists for the 14-day series, so it is reported as missing instead
+    // of being drawn as a flat invented line.
+    assert.equal(payload.data.series, null);
+    assert.equal(payload.data.seriesAvailable, false);
   });
 });
 
@@ -292,15 +299,15 @@ test('deleting an account needs a reason and refuses protected targets', async (
     assert.equal(self.status, 403);
     assert.equal(self.payload.error.code, 'cannot_delete_self');
 
-    // A valid target passes the guards and then stops at the missing key,
-    // which proves nothing is deleted without the service role.
+    // A valid target passes the guards and then stops at the disabled path,
+    // which proves nothing is deleted while deletion is not configured.
     const valid = await call(base, `/api/admin/users/${PLAIN}/delete`, {
       token: 'owner',
       method: 'POST',
       body: { reason: 'requested by user' },
     });
-    assert.equal(valid.status, 503);
-    assert.equal(valid.payload.error.code, 'service_role_required');
+    assert.equal(valid.status, 403);
+    assert.equal(valid.payload.error.code, 'deletion_disabled');
   });
 });
 
