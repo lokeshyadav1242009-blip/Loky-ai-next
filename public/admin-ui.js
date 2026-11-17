@@ -925,6 +925,64 @@ function renderChats() {
 
 /* ---------------------------------- delete -------------------------------- */
 
+/* -------------------------------- messages -------------------------------- */
+
+async function loadMessages() {
+  state.tab = 'messages';
+  syncTabs();
+  if (!el.body) return;
+  try {
+    state.messages = await api('/messages');
+  } catch (error) {
+    state.messages = [];
+    if (error.notConfigured) {
+      // Say what is missing instead of showing an empty list that reads as
+      // "there are no messages".
+      el.body.replaceChildren(emptyState(error.message));
+      return;
+    }
+    el.body.replaceChildren(emptyState(describeAdminError(error)));
+    setNotice(describeAdminError(error), 'error');
+    return;
+  }
+  renderMessages();
+}
+
+function renderMessages() {
+  if (!el.body) return;
+  el.body.replaceChildren();
+
+  if (!state.messages.length) {
+    el.body.append(emptyState('No messages recorded yet.'));
+    return;
+  }
+
+  const note = document.createElement('p');
+  note.className = 'admin-hint';
+  note.textContent =
+    'Metadata only: message ids, conversation ids and timestamps. Message contents are never listed here; reviewing a reported conversation needs a written reason and is audited.';
+  el.body.append(note);
+
+  const list = document.createElement('ul');
+  list.className = 'admin-list';
+  for (const message of state.messages) {
+    const li = document.createElement('li');
+    li.className = 'admin-item';
+
+    const title = document.createElement('span');
+    title.className = 'admin-item__name';
+    title.textContent = `Message ${String(message.id || '').slice(0, 8)}`;
+
+    const meta = document.createElement('span');
+    meta.className = 'admin-item__meta';
+    meta.textContent = `in conversation ${String(message.conversationId || '').slice(0, 8)} · ${fmtDate(message.createdAt)}`;
+
+    li.append(title, meta);
+    list.append(li);
+  }
+  el.body.append(list);
+}
+
 async function deleteUser(user) {
   const label = user.username ? `@${user.username}` : user.email || 'this account';
   try {
@@ -952,7 +1010,7 @@ async function deleteUser(user) {
  */
 export async function verifyAdminAccess() {
   try {
-    const data = await api('/session');
+    const data = await adminSession();
     // The server only answers /session for the configured Super Admin, so a
     // 200 here already means owner access. isSuperAdmin is checked explicitly
     // so an older server build can never be treated as "admin enough".
@@ -968,6 +1026,20 @@ export async function verifyAdminAccess() {
   }
 }
 
+/* The access token can lag a fresh unlock by a tick while it is restored or
+   refreshed, so /session is attempted once more before denying. Bounded: at
+   most two attempts, no polling loop. A 403 (a real non-admin) is not retried. */
+async function adminSession() {
+  try {
+    return await api('/session');
+  } catch (error) {
+    const retryable = error?.status === 401 || !error?.status;
+    if (!retryable) throw error;
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    return api('/session');
+  }
+}
+
 function isAdminPath() {
   return window.location.pathname.replace(/\/+$/, '') === '/admin';
 }
@@ -975,6 +1047,53 @@ function isAdminPath() {
 function showAdminDenied() {
   const denied = document.getElementById('adminDenied');
   if (denied) denied.hidden = false;
+}
+
+function hideAdminDenied() {
+  const denied = document.getElementById('adminDenied');
+  if (denied) denied.hidden = true;
+}
+
+let syncPromise = null;
+
+/* Single entry point for "the session state changed": called by the auth gate on
+   unlock/lock and by the loky:auth-changed listener. Overlapping calls share one
+   request, so a slow network cannot stack /session calls.
+
+   The server is the only thing that grants access: verifyAdminAccess() asks
+   /api/admin/session, which answers 200 only for the configured Super Admin
+   UUID. Nothing here inspects a username, an email or local state. */
+export async function syncAdmin({ signedIn = true } = {}) {
+  if (syncPromise) return syncPromise;
+
+  syncPromise = (async () => {
+    if (!signedIn) {
+      el.navAdmin?.setAttribute('hidden', '');
+      hideAdminDenied();
+      closeAdmin();
+      return false;
+    }
+
+    const isAdmin = await verifyAdminAccess();
+    if (isAdmin) {
+      hideAdminDenied();
+      el.navAdmin?.removeAttribute('hidden');
+      // A deep link to /admin opens the dashboard only after the server agrees.
+      if (isAdminPath()) await openAdmin();
+      return true;
+    }
+
+    el.navAdmin?.setAttribute('hidden', '');
+    // Signed in but not the owner: show Access Denied, never the panel.
+    if (isAdminPath()) showAdminDenied();
+    return false;
+  })();
+
+  try {
+    return await syncPromise;
+  } finally {
+    syncPromise = null;
+  }
 }
 
 export async function openAdmin() {
@@ -1007,6 +1126,7 @@ export function initAdminUI() {
   el.tabChats = document.getElementById('adminTabChats');
   el.tabAnalytics = document.getElementById('adminTabAnalytics');
   el.tabSystem = document.getElementById('adminTabSystem');
+  el.tabMessages = document.getElementById('adminTabMessages');
   el.userSearchWrap = document.getElementById('adminUserSearchWrap');
   el.userSearch = document.getElementById('adminUserSearch');
   el.userSearchForm = document.getElementById('adminUserSearchForm');
@@ -1027,6 +1147,7 @@ export function initAdminUI() {
   el.tabOverview?.addEventListener('click', loadOverview);
   el.tabUsers?.addEventListener('click', () => loadUsers(el.userSearch?.value || ''));
   el.tabChats?.addEventListener('click', loadChats);
+  el.tabMessages?.addEventListener('click', loadMessages);
   el.tabAnalytics?.addEventListener('click', loadAnalytics);
   el.tabReports?.addEventListener('click', loadReports);
   el.tabSystem?.addEventListener('click', loadSystem);
@@ -1044,23 +1165,9 @@ export function initAdminUI() {
 
   // Reveal the nav entry only for a server-verified admin. A signed-out or
   // ordinary user never sees it, and the API would refuse them anyway.
-  window.addEventListener('loky:auth-changed', async (event) => {
-    if (!event?.detail?.signedIn) {
-      el.navAdmin?.setAttribute('hidden', '');
-      closeAdmin();
-      return;
-    }
-    const isAdmin = await verifyAdminAccess();
-    if (isAdmin) {
-      el.navAdmin?.removeAttribute('hidden');
-      // A deep link to /admin opens the dashboard only after the server agrees.
-      if (isAdminPath()) await openAdmin();
-    } else {
-      el.navAdmin?.setAttribute('hidden', '');
-      // Signed in but not the owner: show Access Denied, never the panel.
-      if (isAdminPath()) showAdminDenied();
-    }
+  window.addEventListener('loky:auth-changed', (event) => {
+    syncAdmin({ signedIn: Boolean(event?.detail?.signedIn) }).catch(() => {});
   });
 
-  return { openAdmin, closeAdmin, verifyAdminAccess };
+  return { openAdmin, closeAdmin, verifyAdminAccess, syncAdmin };
 }

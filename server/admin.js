@@ -487,6 +487,29 @@ export function createAdminRouter(deps = {}) {
     res.json({ ok: true, data: rows });
   }));
 
+  // Message metadata only (ids, conversation, timestamp). Contents stay behind
+  // admin_review_conversation, which needs a written reason and is audited.
+  router.get('/messages', asyncHandler(async (req, res) => {
+    if (serviceRole.configured !== true) {
+      return unavailable(
+        res,
+        'rpc_not_configured',
+        'Not configured: listing every message needs the server-side database key. Reviewing a reported conversation still works from Reports.',
+      );
+    }
+    requireServiceRole();
+    const { ok, json } = await serviceFetch(
+      '/rest/v1/messages?select=id,conversation_id,created_at&order=created_at.desc&limit=200',
+    );
+    if (!ok) throw fail(502, 'messages_failed', 'Could not load message metadata.');
+    const rows = (Array.isArray(json) ? json : []).map((row) => ({
+      id: row.id,
+      conversationId: row.conversation_id || null,
+      createdAt: row.created_at || null,
+    }));
+    res.json({ ok: true, data: rows });
+  }));
+
   router.get('/maintenance', (req, res) => {
     res.json({ ok: true, data: maintenanceSnapshot() });
   });
