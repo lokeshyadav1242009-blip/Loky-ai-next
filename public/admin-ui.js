@@ -746,6 +746,15 @@ function systemList() {
         ? 'configured (optional)'
         : 'not configured — dashboard uses database functions',
     ],
+    // The panel is only rendered for the server-verified owner, so echoing the
+    // session UUID here lets the owner confirm it is the allow-listed account
+    // without reading server configuration. It is their own identifier.
+    [
+      'Your session UUID',
+      state.superAdmin?.userId
+        ? `${state.superAdmin.userId} — the configured owner`
+        : 'not verified',
+    ],
     ['Super Admin', sys?.superAdmin?.configured ? 'configured' : 'not configured'],
     ['Maintenance', sys?.maintenance?.on ? `ON · ${sys.maintenance.reason || 'no reason recorded'}` : 'off'],
   ];
