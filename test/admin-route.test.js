@@ -33,11 +33,11 @@ test('the auth gate announces a signed-in session to the admin UI', () => {
   assert.match(appJs, /const adminUI = initAdminUI\(\)/);
   assert.match(
     appJs,
-    /onUnlocked:\s*\(\)\s*=>\s*\{[\s\S]{0,220}?syncAdmin\(\{\s*signedIn:\s*true\s*\}\)/,
+    /onUnlocked:\s*\(\)\s*=>\s*\{[\s\S]{0,240}?syncAdmin\?\.\(\{\s*signedIn:\s*true\s*\}\)/,
   );
   assert.match(
     appJs,
-    /onLocked:\s*\(\)\s*=>\s*\{[\s\S]{0,220}?syncAdmin\(\{\s*signedIn:\s*false\s*\}\)/,
+    /onLocked:\s*\(\)\s*=>\s*\{[\s\S]{0,240}?syncAdmin\?\.\(\{\s*signedIn:\s*false\s*\}\)/,
   );
 });
 

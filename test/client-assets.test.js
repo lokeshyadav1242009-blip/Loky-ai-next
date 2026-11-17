@@ -209,7 +209,15 @@ test('the Messages storage key is separate from the assistant history key', () =
 });
 
 test('the Messages feature ships no Status, calls or video-call surfaces', () => {
-  const section = html.slice(html.indexOf('id="messenger"'), html.indexOf('id="aboutDialog"'));
+  // Scope is the Messages markup: from its section up to whichever unrelated
+  // section comes next. The admin overlay is a separate surface and has its own
+  // "System status" section, so it must not be read as part of Messages.
+  const starts = html.indexOf('id="messenger"');
+  const ends = ['id="adminPanel"', 'id="aboutDialog"']
+    .map((marker) => html.indexOf(marker))
+    .filter((index) => index > starts);
+  const section = html.slice(starts, Math.min(...ends));
+  assert.ok(section.includes('id="messenger"'), 'the Messages markup must be found');
   assert.ok(!/status/i.test(section), 'no Status feature expected in the Messages markup');
   assert.ok(!/video|call/i.test(section), 'no call/video feature expected in the Messages markup');
   assert.ok(!/\bcreateOffer\b|getUserMedia|MediaStream/.test(messagesJs), 'no WebRTC/media APIs expected');
