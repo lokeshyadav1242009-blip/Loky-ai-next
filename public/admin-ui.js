@@ -250,6 +250,10 @@ function renderUsers() {
       } else {
         actions.append(adminButton('Reactivate', 'primary', () => changeStatus(user, 'active')));
       }
+      // Permanent deletion always requires a typed reason and is audited.
+      // Admins (including the Super Admin) never get a delete control, and the
+      // server refuses those deletions even if a request is forged by hand.
+      actions.append(adminButton('Delete', 'danger', () => deleteUser(user)));
     }
 
     li.append(main, status, actions);
@@ -562,6 +566,298 @@ function syncTabs() {
     tab.setAttribute('aria-selected', selected ? 'true' : 'false');
   }
   if (el.userSearchWrap) el.userSearchWrap.hidden = state.tab !== 'users';
+}
+
+/* --------------------------------- charts --------------------------------- */
+
+/**
+ * Inline SVG bar chart — no charting dependency.
+ *
+ * The dashboard is used on Android phones, so a few dozen DOM nodes are a better
+ * trade than shipping a chart library over a mobile connection.
+ */
+function barChart(series, label) {
+  const wrap = document.createElement('figure');
+  wrap.className = 'admin-chart';
+
+  const caption = document.createElement('figcaption');
+  caption.className = 'admin-chart__label';
+  caption.textContent = label;
+  wrap.append(caption);
+
+  const points = Array.isArray(series) ? series : [];
+  const max = Math.max(1, ...points.map((point) => Number(point.count) || 0));
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('viewBox', `0 0 ${Math.max(points.length, 1) * 10} 40`);
+  svg.setAttribute('preserveAspectRatio', 'none');
+  svg.setAttribute('role', 'img');
+  svg.setAttribute('aria-label', `${label}: ${points.map((p) => `${p.day} ${p.count}`).join(', ')}`);
+
+  points.forEach((point, index) => {
+    const count = Number(point.count) || 0;
+    const height = count === 0 ? 0.6 : Math.max(1.2, (count / max) * 38);
+    const bar = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    bar.setAttribute('x', String(index * 10 + 1));
+    bar.setAttribute('y', String(40 - height));
+    bar.setAttribute('width', '7');
+    bar.setAttribute('height', String(height));
+    bar.setAttribute('rx', '1.5');
+    bar.setAttribute('class', 'admin-chart__bar');
+    svg.append(bar);
+  });
+
+  wrap.append(svg);
+  return wrap;
+}
+
+function renderCharts(series) {
+  const box = document.createElement('div');
+  box.className = 'admin-charts';
+  box.append(
+    barChart(series?.users, 'New users · last 14 days'),
+    barChart(series?.messages, 'Messages · last 14 days'),
+  );
+  return box;
+}
+
+function analyticsUnavailable() {
+  if (state.analyticsError?.code === 'service_role_required') {
+    return emptyState('Analytics need SUPABASE_SERVICE_ROLE_KEY configured on the server.');
+  }
+  return emptyState('Analytics are unavailable right now.');
+}
+
+async function loadAnalyticsData() {
+  try {
+    state.analytics = await api('/analytics');
+    state.analyticsError = null;
+  } catch (error) {
+    state.analytics = null;
+    state.analyticsError = error;
+  }
+}
+
+function activityCards(analytics) {
+  const cards = document.createElement('div');
+  cards.className = 'admin-stats';
+  cards.append(
+    statCard('Daily active', analytics?.activity?.dau),
+    statCard('Weekly active', analytics?.activity?.wau),
+    statCard('Messages today', analytics?.activity?.messagesToday),
+    statCard('Messages · 7d', analytics?.activity?.messages7d),
+    statCard('New users today', analytics?.growth?.newUsersToday),
+    statCard('New users · 7d', analytics?.growth?.newUsers7d),
+  );
+  return cards;
+}
+
+/* -------------------------------- analytics ------------------------------- */
+
+async function loadAnalytics() {
+  state.tab = 'analytics';
+  syncTabs();
+  await loadAnalyticsData();
+  if (!el.body) return;
+  el.body.replaceChildren();
+  if (!state.analytics) {
+    el.body.append(analyticsUnavailable());
+    return;
+  }
+  el.body.append(activityCards(state.analytics), renderCharts(state.analytics.series));
+}
+
+/* --------------------------------- overview ------------------------------- */
+
+async function loadSystemData() {
+  try {
+    state.system = await api('/system');
+  } catch {
+    state.system = null;
+  }
+  try {
+    const response = await fetch('/api/health', { headers: { Accept: 'application/json' } });
+    state.aiHealth = await response.json();
+  } catch {
+    state.aiHealth = null;
+  }
+}
+
+function systemList() {
+  const sys = state.system;
+  const ai = state.aiHealth || {};
+  const supabase = sys?.supabase;
+  const rows = [
+    ['AI provider', ai.configured ? `${ai.provider || 'AI'} · ${ai.model || 'unknown model'}` : 'not configured'],
+    [
+      'Supabase',
+      supabase?.reachable
+        ? `reachable · ${supabase.status} · ${supabase.ms} ms`
+        : supabase?.configured
+          ? 'unreachable'
+          : 'not configured',
+    ],
+    ['Backend', sys?.backend?.up ? `up · ${sys.backend.uptimeSeconds}s · node ${sys.backend.node || ''}` : 'unknown'],
+    ['Service role', sys?.serviceRole?.configured ? 'configured' : 'not configured'],
+    ['Super Admin', sys?.superAdmin?.configured ? 'configured' : 'not configured'],
+    ['Maintenance', sys?.maintenance?.on ? `ON · ${sys.maintenance.reason || 'no reason recorded'}` : 'off'],
+  ];
+
+  const list = document.createElement('ul');
+  list.className = 'admin-sys';
+  for (const [key, value] of rows) {
+    const li = document.createElement('li');
+    li.className = 'admin-sys__row';
+    const k = document.createElement('span');
+    k.className = 'admin-sys__key';
+    k.textContent = key;
+    const v = document.createElement('span');
+    v.className = 'admin-sys__val';
+    v.textContent = String(value);
+    li.append(k, v);
+    list.append(li);
+  }
+  return list;
+}
+
+function maintenanceCard() {
+  const wrap = document.createElement('div');
+  wrap.className = 'admin-sys__actions';
+
+  const on = state.system?.maintenance?.on === true;
+  const label = document.createElement('span');
+  label.className = 'admin-sys__key';
+  label.textContent = on ? 'Maintenance mode is ON' : 'Maintenance mode is off';
+
+  wrap.append(
+    label,
+    adminButton(on ? 'Turn off maintenance' : 'Turn on maintenance', on ? 'primary' : 'danger', async () => {
+      try {
+        const reason = await askReason('Reason for changing maintenance mode (recorded in the audit log):');
+        if (!reason) return;
+        const data = await api('/maintenance', { method: 'POST', body: { on: !on, reason } });
+        state.system = { ...(state.system || {}), maintenance: data };
+        setNotice(`Maintenance ${data.on ? 'enabled' : 'disabled'}.`, 'ok');
+        renderSystem();
+      } catch (error) {
+        setNotice(describeAdminError(error), 'error');
+      }
+    }),
+  );
+  return wrap;
+}
+
+function renderSystem() {
+  if (!el.body) return;
+  el.body.replaceChildren(systemList(), maintenanceCard());
+}
+
+async function loadSystem() {
+  state.tab = 'system';
+  syncTabs();
+  await loadSystemData();
+  renderSystem();
+}
+
+function renderOverview() {
+  if (!el.body) return;
+  el.body.replaceChildren();
+
+  if (state.analytics) {
+    el.body.append(activityCards(state.analytics), renderCharts(state.analytics.series));
+  } else {
+    el.body.append(analyticsUnavailable());
+  }
+
+  el.body.append(systemList());
+}
+
+async function loadOverview() {
+  state.tab = 'overview';
+  syncTabs();
+  await Promise.all([
+    (async () => {
+      try {
+        state.stats = await api('/stats');
+      } catch {
+        state.stats = null;
+      }
+    })(),
+    loadSystemData(),
+    loadAnalyticsData(),
+  ]);
+  renderStats();
+  renderOverview();
+}
+
+/* ---------------------------------- chats --------------------------------- */
+
+async function loadChats() {
+  state.tab = 'chats';
+  syncTabs();
+  if (!el.body) return;
+  try {
+    state.chats = await api('/conversations');
+  } catch (error) {
+    state.chats = [];
+    el.body.replaceChildren(emptyState(describeAdminError(error)));
+    setNotice(describeAdminError(error), 'error');
+    return;
+  }
+  renderChats();
+}
+
+function renderChats() {
+  if (!el.body) return;
+  el.body.replaceChildren();
+
+  if (!state.chats.length) {
+    el.body.append(emptyState('No conversations yet.'));
+    return;
+  }
+
+  // Transparency: say plainly what this view does and does not show.
+  const note = document.createElement('p');
+  note.className = 'admin-hint';
+  note.textContent =
+    'Metadata only. Message contents are never shown here. Reviewing a reported conversation requires a written reason and is recorded in the audit log.';
+  el.body.append(note);
+
+  const list = document.createElement('ul');
+  list.className = 'admin-list';
+  for (const chat of state.chats) {
+    const li = document.createElement('li');
+    li.className = 'admin-item';
+
+    const title = document.createElement('span');
+    title.className = 'admin-item__name';
+    title.textContent = `Conversation ${String(chat.id || '').slice(0, 8)}`;
+
+    const meta = document.createElement('span');
+    meta.className = 'admin-item__meta';
+    meta.textContent = `${chat.memberCount ?? 0} member(s) · ${chat.messageCount ?? 0} message(s) · created ${fmtDate(chat.createdAt)}`;
+
+    li.append(title, meta);
+    list.append(li);
+  }
+  el.body.append(list);
+}
+
+/* ---------------------------------- delete -------------------------------- */
+
+async function deleteUser(user) {
+  const label = user.username ? `@${user.username}` : user.email || 'this account';
+  try {
+    const reason = await askReason(
+      `Delete ${label} permanently? The account and its data are removed and this cannot be undone. Reason (recorded in the audit log):`,
+      { min: 5, confirmLabel: 'Delete account' },
+    );
+    if (!reason) return;
+    await api(`/users/${user.id}/delete`, { method: 'POST', body: { reason } });
+    setNotice(`${label} deleted.`, 'ok');
+    await loadUsers(el.userSearch?.value || '');
+  } catch (error) {
+    setNotice(describeAdminError(error), 'error');
+  }
 }
 
 /* ---------------------------------- open ---------------------------------- */
