@@ -12,6 +12,7 @@ import { createAdminRouter } from './admin.js';
 import { requireAuth } from './auth.js';
 import { isMaintenanceOn, maintenanceSnapshot } from './maintenance.js';
 import { parseSuperAdminIds, SUPER_ADMIN_ENV } from './superadmin.js';
+import { isAssetPath } from './asset-path.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const publicDir = path.resolve(__dirname, '..', 'public');
@@ -263,8 +264,7 @@ app.get('*', (req, res, next) => {
   // text/html, which `nosniff` then rejects: the page renders unstyled and no
   // script runs, so the auth gate sits on "Checking your session…" forever.
   // A real 404 makes the missing file obvious instead of looking like a broken UI.
-  const lastSegment = req.path.slice(req.path.lastIndexOf('/') + 1);
-  if (/\.[a-z0-9]+$/i.test(lastSegment)) {
+  if (isAssetPath(req.path)) {
     return res.status(404).type('text/plain').send('Not found');
   }
   return res.sendFile(path.join(publicDir, 'index.html'));
