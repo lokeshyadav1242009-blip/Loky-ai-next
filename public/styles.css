@@ -3810,3 +3810,129 @@ body.auth-locked #messenger {
 .profile__avatar[hidden] {
   display: none;
 }
+
+/* ------------------------- super admin dashboard ------------------------- */
+
+.admin-charts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 10px;
+  margin: 4px 0 14px;
+}
+
+.admin-chart {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid rgba(25, 230, 140, 0.16);
+  border-radius: 12px;
+  background: rgba(6, 24, 18, 0.66);
+}
+
+.admin-chart__label {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #8fb3a4;
+}
+
+.admin-chart svg {
+  display: block;
+  width: 100%;
+  height: 64px;
+  margin-top: 8px;
+}
+
+.admin-chart__bar {
+  fill: #19e68c;
+  opacity: 0.85;
+}
+
+.admin-sys {
+  list-style: none;
+  margin: 0 0 14px;
+  padding: 0;
+  border: 1px solid rgba(25, 230, 140, 0.16);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.admin-sys__row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 12px;
+  font-size: 13px;
+  border-bottom: 1px solid rgba(25, 230, 140, 0.1);
+}
+
+.admin-sys__row:last-child {
+  border-bottom: 0;
+}
+
+.admin-sys__key {
+  color: #8fb3a4;
+}
+
+.admin-sys__val {
+  color: #d6ffe9;
+  text-align: right;
+  word-break: break-word;
+}
+
+.admin-sys__actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid rgba(25, 230, 140, 0.2);
+  border-radius: 12px;
+  background: rgba(6, 24, 18, 0.6);
+}
+
+.admin-hint {
+  margin: 0 0 10px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #8fb3a4;
+}
+
+.admin-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  border: 1px solid rgba(25, 230, 140, 0.14);
+  border-radius: 10px;
+  margin-bottom: 8px;
+  background: rgba(6, 24, 18, 0.5);
+}
+
+.admin-item__name {
+  font-size: 13px;
+  color: #d6ffe9;
+}
+
+.admin-item__meta {
+  font-size: 12px;
+  color: #8fb3a4;
+}
+
+.admin-denied {
+  padding: 32px 20px;
+  text-align: center;
+}
+
+.admin-denied__title {
+  margin: 0 0 8px;
+  font-size: 20px;
+  color: #ff8f8f;
+}
+
+.admin-denied__text {
+  margin: 0 auto 18px;
+  max-width: 44ch;
+  font-size: 14px;
+  line-height: 1.6;
+  color: #9fb8ac;
+}

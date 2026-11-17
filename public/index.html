@@ -610,8 +610,12 @@
       <div class="admin-stats" id="adminStats"></div>
 
       <div class="admin-tabs" role="tablist" aria-label="Admin sections">
-        <button class="admin-tab" id="adminTabUsers" type="button" role="tab" data-admin-tab="users" aria-selected="true">Users</button>
+        <button class="admin-tab" id="adminTabOverview" type="button" role="tab" data-admin-tab="overview" aria-selected="true">Overview</button>
+        <button class="admin-tab" id="adminTabUsers" type="button" role="tab" data-admin-tab="users" aria-selected="false">Users</button>
+        <button class="admin-tab" id="adminTabCharts" type="button" role="tab" data-admin-tab="chats" aria-selected="false">Chats</button>
+        <button class="admin-tab" id="adminTabAnalytics" type="button" role="tab" data-admin-tab="analytics" aria-selected="false">Analytics</button>
         <button class="admin-tab" id="adminTabReports" type="button" role="tab" data-admin-tab="reports" aria-selected="false">Reports</button>
+        <button class="admin-tab" id="adminTabSystem" type="button" role="tab" data-admin-tab="system" aria-selected="false">System</button>
         <button class="admin-tab" id="adminTabLogs" type="button" role="tab" data-admin-tab="logs" aria-selected="false">Activity log</button>
       </div>
 
@@ -623,6 +627,17 @@
       </form>
 
       <div class="admin-body" id="adminBody"></div>
+    </section>
+
+    <!-- Shown only when a signed-in user who is not the Super Admin opens /admin.
+         The server refuses that account's admin API calls regardless. -->
+    <section class="admin-denied" id="adminDenied" hidden aria-label="Access denied">
+      <h2 class="admin-denied__title">Access denied</h2>
+      <p class="admin-denied__text">
+        This dashboard is restricted to the LOKY AI owner account. Your account does not have
+        administrator permission.
+      </p>
+      <a class="btn btn--primary" href="/">Back to LOKY AI</a>
     </section>
 
     <!-- Reason prompt: every privileged action needs a documented reason, which
