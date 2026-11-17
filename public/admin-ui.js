@@ -18,6 +18,12 @@ const state = {
   reports: [],
   logs: [],
   moderation: null,
+  analytics: null,
+  analyticsError: null,
+  system: null,
+  aiHealth: null,
+  chats: [],
+  superAdmin: null,
   open: false,
   notice: '',
   busy: false,
@@ -544,9 +550,14 @@ async function loadLogs() {
   }
 }
 
+function tabs() {
+  return [el.tabOverview, el.tabUsers, el.tabChats, el.tabAnalytics, el.tabReports, el.tabSystem, el.tabLogs].filter(
+    Boolean,
+  );
+}
+
 function syncTabs() {
-  for (const tab of [el.tabUsers, el.tabReports, el.tabLogs]) {
-    if (!tab) continue;
+  for (const tab of tabs()) {
     const selected = tab.dataset.adminTab === state.tab;
     tab.setAttribute('aria-selected', selected ? 'true' : 'false');
   }
@@ -562,10 +573,25 @@ function syncTabs() {
 export async function verifyAdminAccess() {
   try {
     const data = await api('/session');
-    return data?.isAdmin === true;
+    // The server only answers /session for the configured Super Admin, so a
+    // 200 here already means owner access. isSuperAdmin is checked explicitly
+    // so an older server build can never be treated as "admin enough".
+    const allowed = data?.isAdmin === true && data?.isSuperAdmin !== false;
+    state.superAdmin = allowed ? data : null;
+    return allowed;
   } catch {
+    state.superAdmin = null;
     return false;
   }
+}
+
+function isAdminPath() {
+  return window.location.pathname.replace(/\/+$/, '') === '/admin';
+}
+
+function showAdminDenied() {
+  const denied = document.getElementById('adminDenied');
+  if (denied) denied.hidden = false;
 }
 
 export async function openAdmin() {
@@ -574,8 +600,7 @@ export async function openAdmin() {
   el.panel.hidden = false;
   state.open = true;
   setNotice('');
-  await loadStats();
-  await loadUsers(el.userSearch?.value || '');
+  await loadOverview();
 }
 
 export function closeAdmin() {
@@ -595,6 +620,10 @@ export function initAdminUI() {
   el.tabUsers = document.getElementById('adminTabUsers');
   el.tabReports = document.getElementById('adminTabReports');
   el.tabLogs = document.getElementById('adminTabLogs');
+  el.tabOverview = document.getElementById('adminTabOverview');
+  el.tabChats = document.getElementById('adminTabChats');
+  el.tabAnalytics = document.getElementById('adminTabAnalytics');
+  el.tabSystem = document.getElementById('adminTabSystem');
   el.userSearchWrap = document.getElementById('adminUserSearchWrap');
   el.userSearch = document.getElementById('adminUserSearch');
   el.userSearchForm = document.getElementById('adminUserSearchForm');
@@ -612,8 +641,12 @@ export function initAdminUI() {
   closeReasonDialog(null);
 
   el.close?.addEventListener('click', closeAdmin);
+  el.tabOverview?.addEventListener('click', loadOverview);
   el.tabUsers?.addEventListener('click', () => loadUsers(el.userSearch?.value || ''));
+  el.tabChats?.addEventListener('click', loadChats);
+  el.tabAnalytics?.addEventListener('click', loadAnalytics);
   el.tabReports?.addEventListener('click', loadReports);
+  el.tabSystem?.addEventListener('click', loadSystem);
   el.tabLogs?.addEventListener('click', loadLogs);
 
   el.userSearchForm?.addEventListener('submit', (event) => {
@@ -635,8 +668,15 @@ export function initAdminUI() {
       return;
     }
     const isAdmin = await verifyAdminAccess();
-    if (isAdmin) el.navAdmin?.removeAttribute('hidden');
-    else el.navAdmin?.setAttribute('hidden', '');
+    if (isAdmin) {
+      el.navAdmin?.removeAttribute('hidden');
+      // A deep link to /admin opens the dashboard only after the server agrees.
+      if (isAdminPath()) await openAdmin();
+    } else {
+      el.navAdmin?.setAttribute('hidden', '');
+      // Signed in but not the owner: show Access Denied, never the panel.
+      if (isAdminPath()) showAdminDenied();
+    }
   });
 
   return { openAdmin, closeAdmin, verifyAdminAccess };
