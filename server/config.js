@@ -162,6 +162,27 @@ export function loadSupabase(env = process.env) {
 }
 
 /**
+ * Server-only Supabase secret key, used by the Super Admin routes for
+ * cross-user aggregates and account deletion.
+ *
+ * This is the one key that bypasses Row Level Security, so it must never leave
+ * the server. Two guards keep that true:
+ *   - it is stored on `config.serviceRole`, a different object from
+ *     `config.supabase`, which is the only thing /api/supabase-config reads;
+ *   - a publishable/anon key is rejected here, so a mistaken environment can
+ *     never make the public key behave like a secret one (or vice versa).
+ *
+ * Absent or invalid, `configured` is false and the admin routes answer with a
+ * clear `service_role_required` error instead of guessing.
+ */
+export function loadServiceRole(env = process.env) {
+  const key = str(env.SUPABASE_SERVICE_ROLE_KEY);
+  if (!key) return { key: '', configured: false };
+  if (isPublishableKey(key)) return { key: '', configured: false };
+  return { key, configured: true };
+}
+
+/**
  * Build the runtime configuration from an environment object.
  * Pure function so it can be unit tested with fake env values.
  */
@@ -196,6 +217,8 @@ export function loadConfig(env = process.env) {
     timeoutMs: int(env.AI_TIMEOUT_MS, 60000, 1000, 300000),
     keyUrl: preset.keyUrl,
     supabase: loadSupabase(env),
+    // Server-only; never serialised into any response body.
+    serviceRole: loadServiceRole(env),
     server: {
       port: int(env.PORT, 3000, 1, 65535),
       host: str(env.HOST, '0.0.0.0'),
