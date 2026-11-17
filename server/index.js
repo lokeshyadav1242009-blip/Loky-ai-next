@@ -258,6 +258,15 @@ app.use(
 // SPA-ish fallback for unknown non-API GET routes.
 app.get('*', (req, res, next) => {
   if (req.path.startsWith('/api/')) return next();
+  // Asset-looking paths must 404 instead of falling back to the shell. Serving
+  // index.html for a missing .css/.js hands the browser HTML labelled
+  // text/html, which `nosniff` then rejects: the page renders unstyled and no
+  // script runs, so the auth gate sits on "Checking your session…" forever.
+  // A real 404 makes the missing file obvious instead of looking like a broken UI.
+  const lastSegment = req.path.slice(req.path.lastIndexOf('/') + 1);
+  if (/\.[a-z0-9]+$/i.test(lastSegment)) {
+    return res.status(404).type('text/plain').send('Not found');
+  }
   return res.sendFile(path.join(publicDir, 'index.html'));
 });
 

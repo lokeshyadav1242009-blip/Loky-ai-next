@@ -16,10 +16,13 @@
       content="A modern, mobile-first AI assistant with streaming answers and Markdown support. Created by Lokesh Yadav."
     />
     <meta property="og:type" content="website" />
-    <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
-    <link rel="apple-touch-icon" href="./favicon.svg" />
-    <link rel="manifest" href="./manifest.webmanifest" />
-    <link rel="stylesheet" href="./styles.css" />
+    <!-- Root-absolute asset URLs on purpose: this page is also served for
+         nested routes (/admin, /messages/…), where "./styles.css" would
+         resolve to /admin/styles.css and return the SPA fallback HTML. -->
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/favicon.svg" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="stylesheet" href="/styles.css" />
   </head>
   <!-- auth-locked is present in the markup on purpose: the shell must never be
        painted, even for one frame, before a session has been verified. The gate
@@ -767,6 +770,6 @@
       </article>
     </template>
 
-    <script type="module" src="./app.js"></script>
+    <script type="module" src="/app.js"></script>
   </body>
 </html>
