@@ -205,6 +205,267 @@ export function createAdminRouter(deps = {}) {
     res.json({ ok: true, data: Array.isArray(data) ? data : [] });
   }));
 
+  // --- server-only helpers -------------------------------------------------
+  // These read across all users, which RLS deliberately forbids for a normal
+  // session. They use the service-role key, are reachable only after
+  // requireAdmin, and never return message bodies or credentials.
+  function requireServiceRole() {
+    if (serviceRole.configured !== true) {
+      throw fail(
+        503,
+        'service_role_required',
+        'Cross-user admin data needs SUPABASE_SERVICE_ROLE_KEY configured on the server.',
+      );
+    }
+  }
+
+  async function serviceFetch(path, { method = 'GET', body, prefer } = {}) {
+    requireServiceRole();
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), UPSTREAM_TIMEOUT_MS);
+    try {
+      const response = await fetchImpl(`${supabase.url}${path}`, {
+        method,
+        headers: {
+          apikey: serviceRole.key,
+          Authorization: `Bearer ${serviceRole.key}`,
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+          ...(prefer ? { Prefer: prefer } : {}),
+        },
+        body: body === undefined ? undefined : JSON.stringify(body),
+        signal: controller.signal,
+      });
+      const text = await response.text();
+      let json = null;
+      try {
+        json = text ? JSON.parse(text) : null;
+      } catch {
+        json = null;
+      }
+      const range = typeof response.headers?.get === 'function' ? response.headers.get('content-range') : '';
+      return { ok: response.ok, status: response.status, json, range };
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  /** Exact row count via PostgREST's content-range header. */
+  async function countRows(table, filter = '') {
+    const { ok, range } = await serviceFetch(`/rest/v1/${table}?select=id${filter}&limit=1`, {
+      prefer: 'count=exact',
+    });
+    if (!ok) throw fail(502, 'count_failed', `Could not count rows in ${table}.`);
+    const total = Number.parseInt(String(range || '').split('/')[1], 10);
+    return Number.isFinite(total) ? total : 0;
+  }
+
+  // A metric that cannot be read is reported as null (shown as "—") rather than
+  // a confident 0, so a schema difference never invents a real-looking number.
+  async function safeCount(table, filter) {
+    try {
+      return await countRows(table, filter);
+    } catch {
+      return null;
+    }
+  }
+
+  async function probeSupabase() {
+    if (!supabase.configured) return { configured: false, reachable: false, status: 0, ms: 0 };
+    const started = Date.now();
+    try {
+      const response = await fetchImpl(`${supabase.url}/auth/v1/health`, {
+        headers: { apikey: supabase.key, Authorization: `Bearer ${supabase.key}` },
+        signal: AbortSignal.timeout(6000),
+      });
+      return {
+        configured: true,
+        reachable: response.ok,
+        status: response.status,
+        ms: Date.now() - started,
+      };
+    } catch {
+      return { configured: true, reachable: false, status: 0, ms: Date.now() - started };
+    }
+  }
+
+  /** Bucket ISO timestamps into the last `days` UTC days, oldest first. */
+  function bucketByDay(rows, days) {
+    const dayMs = 86400000;
+    const today = new Date();
+    today.setUTCHours(0, 0, 0, 0);
+    const buckets = [];
+    for (let i = days - 1; i >= 0; i -= 1) {
+      const date = new Date(today.getTime() - i * dayMs);
+      buckets.push({ day: date.toISOString().slice(0, 10), count: 0 });
+    }
+    const index = new Map(buckets.map((bucket, at) => [bucket.day, at]));
+    for (const row of rows) {
+      const stamp = typeof row?.created_at === 'string' ? row.created_at.slice(0, 10) : '';
+      const at = index.get(stamp);
+      if (at !== undefined) buckets[at].count += 1;
+    }
+    return buckets;
+  }
+
+  // --- dashboard routes ----------------------------------------------------
+  router.get('/system', asyncHandler(async (req, res) => {
+    const supabaseHealth = await probeSupabase();
+    res.json({
+      ok: true,
+      data: {
+        backend: { up: true, uptimeSeconds: Math.round(process.uptime()), node: process.version },
+        supabase: supabaseHealth,
+        maintenance: maintenanceSnapshot(),
+        superAdmin: { configured: superAdminIds.length > 0, userId: req.admin.id },
+        serviceRole: { configured: serviceRole.configured === true },
+      },
+    });
+  }));
+
+  router.get('/analytics', asyncHandler(async (req, res) => {
+    requireServiceRole();
+    const now = Date.now();
+    const dayStart = new Date();
+    dayStart.setUTCHours(0, 0, 0, 0);
+    const since = (ms) => encodeURIComponent(new Date(ms).toISOString());
+    const weekAgo = now - 7 * 86400000;
+
+    const [totalUsers, totalMessages, totalConversations, newUsers7d, newUsersToday, messagesToday, messages7d, dau, wau] =
+      await Promise.all([
+        countRows('profiles'),
+        countRows('messages'),
+        countRows('conversations'),
+        countRows('profiles', `&created_at=gte.${since(weekAgo)}`),
+        countRows('profiles', `&created_at=gte.${since(dayStart.getTime())}`),
+        countRows('messages', `&created_at=gte.${since(dayStart.getTime())}`),
+        countRows('messages', `&created_at=gte.${since(weekAgo)}`),
+        safeCount('profiles', `&last_seen_at=gte.${since(dayStart.getTime())}`),
+        safeCount('profiles', `&last_seen_at=gte.${since(weekAgo)}`),
+      ]);
+
+    const window30 = since(now - 30 * 86400000);
+    const [userRows, messageRows] = await Promise.all([
+      serviceFetch(`/rest/v1/profiles?select=created_at&created_at=gte.${window30}&limit=5000`),
+      serviceFetch(`/rest/v1/messages?select=created_at&created_at=gte.${window30}&limit=5000`),
+    ]);
+
+    res.json({
+      ok: true,
+      data: {
+        totals: { users: totalUsers, conversations: totalConversations, messages: totalMessages },
+        activity: { dau, wau, messagesToday, messages7d },
+        growth: { newUsersToday, newUsers7d },
+        series: {
+          users: bucketByDay(Array.isArray(userRows.json) ? userRows.json : [], 14),
+          messages: bucketByDay(Array.isArray(messageRows.json) ? messageRows.json : [], 14),
+        },
+      },
+    });
+  }));
+
+  // Conversation metadata only: ids, timestamps and counts. Message contents
+  // are deliberately not selectable here. Reviewing a reported conversation
+  // stays behind admin_review_conversation, which requires a written reason and
+  // writes an audit entry.
+  router.get('/conversations', asyncHandler(async (req, res) => {
+    requireServiceRole();
+    const { ok, json } = await serviceFetch(
+      '/rest/v1/conversations?select=id,created_at,conversation_members(count),messages(count)&order=created_at.desc&limit=200',
+    );
+    if (!ok) throw fail(502, 'conversations_failed', 'Could not load conversation metadata.');
+    const rows = (Array.isArray(json) ? json : []).map((row) => ({
+      id: row.id,
+      createdAt: row.created_at || null,
+      memberCount: row.conversation_members?.[0]?.count ?? 0,
+      messageCount: row.messages?.[0]?.count ?? 0,
+    }));
+    res.json({ ok: true, data: rows });
+  }));
+
+  router.get('/maintenance', (req, res) => {
+    res.json({ ok: true, data: maintenanceSnapshot() });
+  });
+
+  router.post('/maintenance', asyncHandler(async (req, res) => {
+    const on = req.body?.on === true;
+    const reason = String(req.body?.reason || '').trim().slice(0, 300);
+    const snapshot = setMaintenance({ on, reason, updatedBy: req.admin.id });
+    // Best effort: the toggle still applies if the audit write is refused.
+    try {
+      const { ok } = await serviceFetch('/rest/v1/admin_audit_log', {
+        method: 'POST',
+        prefer: 'return=minimal',
+        body: [
+          {
+            admin_id: req.admin.id,
+            action: on ? 'maintenance.enable' : 'maintenance.disable',
+            target_type: 'system',
+            target_id: null,
+            reason: reason || 'maintenance toggle',
+          },
+        ],
+      });
+      if (!ok) console.error('[admin] maintenance audit write rejected');
+    } catch {
+      console.error('[admin] maintenance audit write failed');
+    }
+    res.json({ ok: true, data: snapshot });
+  }));
+
+  // Deleting an account is irreversible, so it demands a written reason, refuses
+  // the Super Admin and every other administrator, and is audited.
+  router.post('/users/:id/delete', asyncHandler(async (req, res) => {
+    requireServiceRole();
+    const targetId = String(req.params.id || '');
+    const reason = String(req.body?.reason || '').trim();
+    if (reason.length < 5) {
+      throw fail(400, 'reason_required', 'Give a short reason (at least 5 characters) for deleting an account.');
+    }
+
+    const { ok, json } = await serviceFetch(
+      `/rest/v1/profiles?id=eq.${encodeURIComponent(targetId)}&select=id,username,is_admin`,
+    );
+    const target = ok && Array.isArray(json) ? json[0] : null;
+    if (!target) throw fail(404, 'user_not_found', 'That account does not exist.');
+
+    const verdict = canDeleteUser({
+      actorId: req.admin.id,
+      targetId: target.id,
+      targetIsAdmin: target.is_admin === true,
+      allowList: superAdminIds,
+    });
+    if (!verdict.ok) throw fail(403, verdict.code, verdict.message);
+
+    const removal = await serviceFetch(`/auth/v1/admin/users/${encodeURIComponent(target.id)}`, {
+      method: 'DELETE',
+    });
+    if (!removal.ok) {
+      throw fail(502, 'delete_failed', 'The authentication service refused to delete that account.');
+    }
+
+    try {
+      await serviceFetch('/rest/v1/admin_audit_log', {
+        method: 'POST',
+        prefer: 'return=minimal',
+        body: [
+          {
+            admin_id: req.admin.id,
+            action: 'user.delete',
+            target_type: 'user',
+            target_id: target.id,
+            reason,
+            details: { username: target.username || '' },
+          },
+        ],
+      });
+    } catch {
+      console.error('[admin] delete audit write failed');
+    }
+
+    res.json({ ok: true, data: { deleted: target.id } });
+  }));
+
   router.use((req, res) => {
     res.status(404).json({ ok: false, error: { code: 'not_found', message: 'Unknown admin endpoint.' } });
   });
