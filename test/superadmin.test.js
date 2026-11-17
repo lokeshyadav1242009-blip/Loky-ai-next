@@ -10,6 +10,7 @@ import {
   isSuperAdmin,
   superAdminDecision,
   canDeleteUser,
+  SUPER_ADMIN_ENV,
 } from '../server/superadmin.js';
 import { setMaintenance, isMaintenanceOn, maintenanceSnapshot, resetMaintenance } from '../server/maintenance.js';
 
@@ -321,4 +322,57 @@ test('maintenance mode can only be switched by the Super Admin', async () => {
     assert.equal(allowed.status, 200);
     assert.equal(isMaintenanceOn(), true);
   });
+});
+
+/* ---------------- every admin endpoint requires a token ---------------- */
+
+// Full route inventory of server/admin.js. If a new endpoint is ever declared
+// above the requireAdmin middleware, it answers here instead of returning 401,
+// so this test fails instead of shipping an open route.
+const ALL_ADMIN_ENDPOINTS = [
+  ['GET', '/session'],
+  ['GET', '/stats'],
+  ['GET', '/users'],
+  ['POST', `/users/${PLAIN}/status`],
+  ['GET', '/reports'],
+  ['POST', '/reports/report-1'],
+  ['GET', '/conversations'],
+  ['GET', '/conversations/conv-1'],
+  ['GET', '/audit'],
+  ['GET', '/system'],
+  ['GET', '/analytics'],
+  ['GET', '/maintenance'],
+  ['POST', '/maintenance'],
+  ['POST', `/users/${PLAIN}/delete`],
+];
+
+test('every admin endpoint refuses an anonymous caller', async () => {
+  await withApp(async (base) => {
+    for (const [method, path] of ALL_ADMIN_ENDPOINTS) {
+      const { status, payload } = await call(base, `/api/admin${path}`, {
+        method,
+        body: method === 'POST' ? { reason: 'anonymous attempt' } : undefined,
+      });
+      assert.equal(status, 401, `${method} ${path} must require a token`);
+      assert.equal(payload.error.code, 'missing_token', `${method} ${path} code`);
+    }
+  });
+});
+
+/* -------------- the deployed allow-list is exactly the owner ------------ */
+
+// A public identifier, not a credential: a bare UUID cannot authenticate
+// anything, so pinning it here is a safe regression guard against a second
+// UUID ever being added to the deployed allow-list.
+const DEPLOYED_OWNER = '69b59366-0c6d-4577-82ad-282e624f19d2';
+
+test('the configured allow-list admits exactly one UUID: the owner', (t) => {
+  const raw = process.env[SUPER_ADMIN_ENV];
+  if (!raw) return t.skip(`${SUPER_ADMIN_ENV} is not set in this environment`);
+  const list = parseSuperAdminIds(raw);
+  assert.equal(list.length, 1, 'exactly one Super Admin may be configured');
+  assert.equal(list[0], DEPLOYED_OWNER, 'the configured Super Admin must be the owner');
+  assert.equal(isSuperAdmin(DEPLOYED_OWNER, list), true);
+  assert.equal(isSuperAdmin(OTHER_ADMIN, list), false);
+  assert.equal(isSuperAdmin(PLAIN, list), false);
 });
