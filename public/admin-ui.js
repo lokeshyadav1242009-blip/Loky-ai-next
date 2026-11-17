@@ -84,6 +84,17 @@ async function api(path, { method = 'GET', body } = {}) {
     error.status = response.status;
     throw error;
   }
+
+  // A panel the database cannot answer is not a failure: the server says
+  // available:false and why. Callers render "Not configured" instead of a
+  // red banner, and never a made-up number.
+  if (payload?.available === false) {
+    const error = new Error(payload?.message || 'Not configured.');
+    error.code = payload?.reason || 'not_configured';
+    error.notConfigured = true;
+    throw error;
+  }
+
   return payload.data;
 }
 
@@ -611,6 +622,11 @@ function barChart(series, label) {
 }
 
 function renderCharts(series) {
+  if (!series) {
+    return emptyState(
+      'Not configured: the 14-day activity charts need a database function that is not installed. The totals above are live.',
+    );
+  }
   const box = document.createElement('div');
   box.className = 'admin-charts';
   box.append(
@@ -621,8 +637,12 @@ function renderCharts(series) {
 }
 
 function analyticsUnavailable() {
-  if (state.analyticsError?.code === 'service_role_required') {
-    return emptyState('Analytics need SUPABASE_SERVICE_ROLE_KEY configured on the server.');
+  const error = state.analyticsError;
+  if (error?.notConfigured) return emptyState(error.message);
+  if (error?.code === 'db_admin_flag_missing') {
+    return emptyState(
+      'Not configured: the database admin functions require profiles.is_admin = true for this account.',
+    );
   }
   return emptyState('Analytics are unavailable right now.');
 }
@@ -697,7 +717,12 @@ function systemList() {
           : 'not configured',
     ],
     ['Backend', sys?.backend?.up ? `up · ${sys.backend.uptimeSeconds}s · node ${sys.backend.node || ''}` : 'unknown'],
-    ['Service role', sys?.serviceRole?.configured ? 'configured' : 'not configured'],
+    [
+      'Privileged key',
+      sys?.serviceRole?.configured
+        ? 'configured (optional)'
+        : 'not configured — dashboard uses database functions',
+    ],
     ['Super Admin', sys?.superAdmin?.configured ? 'configured' : 'not configured'],
     ['Maintenance', sys?.maintenance?.on ? `ON · ${sys.maintenance.reason || 'no reason recorded'}` : 'off'],
   ];
@@ -763,7 +788,25 @@ function renderOverview() {
   el.body.replaceChildren();
 
   if (state.analytics) {
-    el.body.append(activityCards(state.analytics), renderCharts(state.analytics.series));
+    const a = state.analytics;
+    if (a.totals) {
+      // Totals come from the SECURITY DEFINER RPC, so they need no privileged
+      // key. Each card is a real number or an em dash, never a guess.
+      const cards = document.createElement('div');
+      cards.className = 'admin-stats';
+      cards.append(
+        statCard('Registered users', a.totals.users),
+        statCard('Active users', a.totals.activeUsers),
+        statCard('Suspended', a.totals.suspendedUsers),
+        statCard('Conversations', a.totals.conversations),
+        statCard('Messages', a.totals.messages),
+        statCard('Open reports', a.totals.openReports),
+      );
+      el.body.append(cards);
+    } else {
+      el.body.append(activityCards(a));
+    }
+    el.body.append(renderCharts(a.series));
   } else {
     el.body.append(analyticsUnavailable());
   }
@@ -856,7 +899,10 @@ async function deleteUser(user) {
     setNotice(`${label} deleted.`, 'ok');
     await loadUsers(el.userSearch?.value || '');
   } catch (error) {
-    setNotice(describeAdminError(error), 'error');
+    setNotice(
+      error.code === 'deletion_disabled' ? error.message : describeAdminError(error),
+      'error',
+    );
   }
 }
 
@@ -874,6 +920,9 @@ export async function verifyAdminAccess() {
     // so an older server build can never be treated as "admin enough".
     const allowed = data?.isAdmin === true && data?.isSuperAdmin !== false;
     state.superAdmin = allowed ? data : null;
+    // Deletion is the one action that still needs the optional privileged key,
+    // so the button stays disabled unless the server reports it available.
+    state.deletionEnabled = allowed && data?.deletionEnabled === true;
     return allowed;
   } catch {
     state.superAdmin = null;
