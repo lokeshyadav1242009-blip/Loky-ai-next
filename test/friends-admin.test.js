@@ -120,6 +120,9 @@ function buildApp(overrides = {}) {
   const calls = [];
   const deps = {
     supabase: { url: '', key: '', configured: true },
+    // The Super Admin allow-list: these tests exercise the dashboard as the
+    // configured owner, so ADMIN_ID is the allow-listed UUID.
+    superAdminIds: [ADMIN_ID],
     verifyUser: async (token) => {
       if (token === 'admin-token') return { id: ADMIN_ID, email: 'admin@loky.ai' };
       if (token === 'user-token') return { id: USER_ID, email: 'user@loky.ai' };

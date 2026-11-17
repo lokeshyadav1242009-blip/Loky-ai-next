@@ -107,7 +107,7 @@ test('nobody can delete the Super Admin account, including the owner', () => {
   assert.equal(canDeleteUser({ actorId: OWNER, targetId: OWNER, targetIsAdmin: true, allowList }).code, 'cannot_delete_self');
   assert.equal(
     canDeleteUser({ actorId: OTHER_ADMIN, targetId: OWNER, targetIsAdmin: true, allowList }).code,
-    'protected_super_admin',
+    'cannot_delete_super_admin',
   );
 });
 

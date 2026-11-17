@@ -68,7 +68,7 @@ export function superAdminDecision({ userId, isAdmin, status, allowList }) {
   if (!superAdminConfigured(allowList)) {
     return {
       ok: false,
-      status: 403,
+      status: 503,
       code: 'super_admin_not_configured',
       message: 'The Super Admin account is not configured on this server yet.',
       hint:

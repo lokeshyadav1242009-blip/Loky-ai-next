@@ -416,12 +416,18 @@ export function createAdminRouter(deps = {}) {
   // Deleting an account is irreversible, so it demands a written reason, refuses
   // the Super Admin and every other administrator, and is audited.
   router.post('/users/:id/delete', asyncHandler(async (req, res) => {
-    requireServiceRole();
     const targetId = String(req.params.id || '');
     const reason = String(req.body?.reason || '').trim();
     if (reason.length < 5) {
       throw fail(400, 'reason_required', 'Give a short reason (at least 5 characters) for deleting an account.');
     }
+    // Cheap guards first: a malformed id or an attempt to delete yourself is
+    // refused before the service-role key is even required.
+    if (!isUuid(targetId)) throw fail(400, 'invalid_target', 'Invalid account id.');
+    if (targetId.toLowerCase() === String(req.admin.id).toLowerCase()) {
+      throw fail(403, 'cannot_delete_self', 'You cannot delete your own account.');
+    }
+    requireServiceRole();
 
     const { ok, json } = await serviceFetch(
       `/rest/v1/profiles?id=eq.${encodeURIComponent(targetId)}&select=id,username,is_admin`,
