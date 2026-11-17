@@ -26,10 +26,11 @@ import {
 } from './chat-utils.js';
 import { initMessages, leaveMessages } from './messages.js';
 import { initProfileUI } from './direct-messages.js';
-import { initAuthGate, isUnlocked } from './auth-gate.js';
+import { initAuthGate, isUnlocked, openAuthGate } from './auth-gate.js';
 import { initFriendsUI } from './friends-ui.js';
 import { initAdminUI } from './admin-ui.js';
 import { EXIT_HINT, closeLayer, initBackNav, openLayer, resetLayers } from './back-nav.js';
+import { clearLocalSession, getAccessToken, refreshAccessToken } from './supabase-client.js';
 
 
 const HEALTH_REFRESH_MS = 60000;
@@ -708,26 +709,87 @@ function normalizeError(payload, status) {
 }
 
 /**
+ * The signed-in user's access token, or '' when there is none.
+ *
+ * The token — not the browser's "I look logged in" state — is what the server
+ * verifies. A deployment without Supabase configured has no session to read
+ * and requireAuth lets it through, so an empty token is legitimate there.
+ */
+async function currentAccessToken() {
+  try {
+    return await getAccessToken();
+  } catch {
+    return '';
+  }
+}
+
+function chatRequest(token, messages, signal) {
+  const headers = { 'Content-Type': 'application/json', Accept: 'text/event-stream' };
+  // Without this header the server sees an anonymous caller and answers
+  // auth_required, which is the "Sign in to use this feature." failure.
+  if (token) headers.Authorization = `Bearer ${token}`;
+  return fetch('/api/chat', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ messages }),
+    signal,
+  });
+}
+
+function networkFailure(signal) {
+  return {
+    code: 'network_error',
+    message: 'Could not reach the server. Check your internet connection and try again.',
+    hint: 'If you are running locally, make sure `npm start` is still running.',
+    retryable: true,
+  };
+}
+
+/**
  * POST the conversation and stream the reply.
  * @returns {Promise<{text: string, aborted: boolean}>}
  */
 async function streamChat(messages, { onDelta, onMeta, signal }) {
   let response;
   try {
-    response = await fetch('/api/chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
-      body: JSON.stringify({ messages }),
-      signal,
-    });
+    response = await chatRequest(await currentAccessToken(), messages, signal);
   } catch (error) {
     if (signal?.aborted) return { text: '', aborted: true };
-    throw {
-      code: 'network_error',
-      message: 'Could not reach the server. Check your internet connection and try again.',
-      hint: 'If you are running locally, make sure `npm start` is still running.',
-      retryable: true,
-    };
+    throw networkFailure(signal);
+  }
+
+  // A stored session can look valid in the browser after the server has
+  // already expired or revoked it. Refresh exactly once and retry, instead of
+  // bouncing the user to the login screen on the first 401.
+  if (response.status === 401) {
+    let refreshed = '';
+    try {
+      refreshed = await refreshAccessToken();
+    } catch {
+      refreshed = '';
+    }
+
+    if (refreshed) {
+      try {
+        response = await chatRequest(refreshed, messages, signal);
+      } catch (error) {
+        if (signal?.aborted) return { text: '', aborted: true };
+        throw networkFailure(signal);
+      }
+    }
+
+    // Still rejected after a fresh token: the session really is gone, so drop
+    // it and show the login screen. This is the only path that gates the UI.
+    if (response.status === 401) {
+      clearLocalSession();
+      openAuthGate();
+      throw {
+        code: 'auth_required',
+        message: 'Your session has expired. Please sign in again.',
+        hint: '',
+        retryable: false,
+      };
+    }
   }
 
   if (!response.ok) {
@@ -1046,6 +1108,10 @@ function errorTitle(code) {
       return 'Invalid request';
     case 'network_error':
       return 'Connection problem';
+    case 'auth_required':
+    case 'auth_invalid':
+    case 'signed_out':
+      return 'Please sign in again';
     default:
       return 'Something went wrong';
   }

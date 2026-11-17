@@ -479,6 +479,26 @@ export async function getAccessToken() {
   return accessToken();
 }
 
+/**
+ * Force a refresh and return a new access token.
+ *
+ * Used when the server rejects a token that still looked valid locally
+ * (expired, revoked or rotated server-side). One attempt only: when the
+ * refresh token is gone too, the caller treats the session as ended.
+ * Throws code 'signed_out' in that case.
+ */
+export async function refreshAccessToken() {
+  const session = readStoredSession();
+  if (!session) throw new SupabaseError('signed_out', 'Please sign in first.', 401);
+  if (!session.refreshToken) {
+    writeSession(null);
+    throw new SupabaseError('signed_out', 'Your session expired. Please sign in again.', 401);
+  }
+  // expiresAt = 0 forces the shared refresh path in accessToken().
+  writeSession({ ...session, expiresAt: 0 });
+  return accessToken();
+}
+
 /* -------------------------------- PostgREST ------------------------------- */
 
 async function rest(path, { method = 'GET', body, prefer, retry = true } = {}) {

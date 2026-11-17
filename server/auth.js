@@ -55,6 +55,19 @@ function deny(res, status, code, message, retryable) {
 }
 
 /**
+ * Record why a request was rejected so a 401 can be diagnosed from logs.
+ *
+ * Method, path, code and the verification status only. The bearer credential,
+ * the Authorization header and the account's email are never logged, because
+ * a log line is not a place for a token.
+ */
+function logAuthFailure(req, code, detail = '') {
+  const method = req.method || '';
+  const path = req.originalUrl || req.url || '';
+  console.warn(`[auth] ${code} ${method} ${path}${detail ? ` — ${detail}` : ''}`);
+}
+
+/**
  * Build the middleware. `getSupabase` and `fetchImpl` are injectable so the
  * behaviour can be tested without a live Supabase project or network.
  */
@@ -74,11 +87,13 @@ export function createRequireAuth({ getSupabase = supabaseSettings, fetchImpl } 
 
     const token = bearerToken(req);
     if (!token) {
+      logAuthFailure(req, 'auth_required', 'missing bearer header');
       return deny(res, 401, 'auth_required', 'Sign in to use this feature.', false);
     }
 
     const doFetch = fetchImpl || globalThis.fetch;
     if (typeof doFetch !== 'function') {
+      logAuthFailure(req, 'auth_unavailable', 'no fetch implementation');
       return deny(
         res,
         503,
@@ -98,6 +113,7 @@ export function createRequireAuth({ getSupabase = supabaseSettings, fetchImpl } 
             : undefined,
       });
     } catch {
+      logAuthFailure(req, 'auth_unavailable', 'verification request failed');
       return deny(
         res,
         503,
@@ -108,6 +124,7 @@ export function createRequireAuth({ getSupabase = supabaseSettings, fetchImpl } 
     }
 
     if (!response || !response.ok) {
+      logAuthFailure(req, 'auth_invalid', `verify status ${response ? response.status : 'none'}`);
       return deny(res, 401, 'auth_invalid', 'Your session has expired. Sign in again.', false);
     }
 
@@ -119,6 +136,7 @@ export function createRequireAuth({ getSupabase = supabaseSettings, fetchImpl } 
     }
 
     if (!user || !user.id) {
+      logAuthFailure(req, 'auth_invalid', 'verify returned no user');
       return deny(res, 401, 'auth_invalid', 'Your session has expired. Sign in again.', false);
     }
 
