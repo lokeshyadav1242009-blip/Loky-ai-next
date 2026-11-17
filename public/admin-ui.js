@@ -865,6 +865,12 @@ async function loadChats() {
     state.chats = await api('/conversations');
   } catch (error) {
     state.chats = [];
+    if (error.notConfigured) {
+      // The database cannot list every conversation without a function it does
+      // not have. Say so, instead of showing an empty list that reads as "none".
+      el.body.replaceChildren(emptyState(error.message));
+      return;
+    }
     el.body.replaceChildren(emptyState(describeAdminError(error)));
     setNotice(describeAdminError(error), 'error');
     return;
