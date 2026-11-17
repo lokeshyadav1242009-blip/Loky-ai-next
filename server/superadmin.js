@@ -77,13 +77,26 @@ export function superAdminDecision({ userId, isAdmin, status, allowList }) {
     };
   }
 
-  if (!isAdmin) {
-    return {
-      ok: false,
-      status: 403,
-      code: 'not_admin',
-      message: 'This account is not an administrator.',
-    };
+  // The server-controlled UUID allow-list is the authoritative grant. It is read
+  // from the server environment, so no account can award itself this role.
+  // profiles.is_admin is only a secondary signal: it can never admit an account
+  // that is not allow-listed, and the owner does not need it set, because that
+  // flag is not writable from the app and a missing flag must not lock the owner
+  // out of their own dashboard.
+  if (!isSuperAdmin(userId, allowList)) {
+    return isAdmin
+      ? {
+          ok: false,
+          status: 403,
+          code: 'not_super_admin',
+          message: 'Only the LOKY AI owner account may open the admin dashboard.',
+        }
+      : {
+          ok: false,
+          status: 403,
+          code: 'not_admin',
+          message: 'This account is not an administrator.',
+        };
   }
 
   if (status && status !== 'active') {
@@ -92,15 +105,6 @@ export function superAdminDecision({ userId, isAdmin, status, allowList }) {
       status: 403,
       code: 'account_inactive',
       message: 'This administrator account is not active.',
-    };
-  }
-
-  if (!isSuperAdmin(userId, allowList)) {
-    return {
-      ok: false,
-      status: 403,
-      code: 'not_super_admin',
-      message: 'Only the LOKY AI owner account may open the admin dashboard.',
     };
   }
 

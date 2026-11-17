@@ -100,6 +100,19 @@ test('the owner with an active account is allowed', () => {
   assert.equal(decision.ok, true);
 });
 
+test('the allow-listed owner is granted even without the is_admin flag', () => {
+  // The role is assigned server-side through the UUID allow-list, which the
+  // app cannot write. A missing profiles.is_admin flag must not lock the owner
+  // out of their own dashboard, and it must not let anyone else in.
+  const decision = superAdminDecision({
+    userId: OWNER,
+    isAdmin: false,
+    status: 'active',
+    allowList: parseSuperAdminIds(OWNER),
+  });
+  assert.equal(decision.ok, true);
+});
+
 /* ----------------------------- delete guards ------------------------------ */
 
 test('nobody can delete the Super Admin account, including the owner', () => {

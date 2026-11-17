@@ -76,6 +76,8 @@ app.get('/api/health', async (req, res) => {
     uptimeSeconds: Math.round((Date.now() - startedAt) / 1000),
     authVerification,
     maintenance: maintenanceSnapshot(),
+    // Whether the owner UUID is configured. The UUID itself is never returned.
+    superAdmin: { configured: parseSuperAdminIds(process.env[SUPER_ADMIN_ENV]).length > 0 },
     limits: {
       rateLimitMax: config.limits.rateLimitMax,
       rateLimitWindowMs: config.limits.rateLimitWindowMs,
