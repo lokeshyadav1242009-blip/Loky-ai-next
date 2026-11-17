@@ -197,3 +197,21 @@ test('the delete endpoint is refused for a normal user before any key check', as
   assert.equal(res.status, 403);
   assert.equal(res.json.error.code, 'not_admin');
 });
+
+test('the messages list is metadata-only and says so when the key is missing', async () => {
+  const res = await call(buildApp(), '/api/admin/messages', { token: 'owner-token' });
+  assert.equal(res.status, 200);
+  assert.equal(res.json.available, false);
+  assert.equal(res.json.reason, 'rpc_not_configured');
+  assert.equal(res.json.data, null);
+  assert.match(res.json.message, /Not configured/);
+});
+
+test('the messages list denies anonymous and non-admin callers', async () => {
+  const anonymous = await call(buildApp(), '/api/admin/messages');
+  assert.equal(anonymous.status, 401);
+
+  const plain = await call(buildApp(), '/api/admin/messages', { token: 'user-token' });
+  assert.equal(plain.status, 403);
+  assert.equal(plain.json.error.code, 'not_admin');
+});
