@@ -50,7 +50,7 @@ test('syncAdmin is exported and collapses overlapping session checks', () => {
 test('the dashboard still waits for the server before opening on a deep link', () => {
   // Path check is exact ('/admin'), tolerating a trailing slash only.
   assert.match(adminJs, /=== '\/admin'/);
-  assert.match(adminJs, /if \(isAdminPath\(\)\) await openAdmin\(\)/);
+  assert.match(adminJs, /if \(isAdminPath\(\)\) \{\s*canonicaliseAdminPath\(\);\s*await openAdmin\(\);/);
   assert.match(adminJs, /if \(isAdminPath\(\)\) showAdminDenied\(\)/);
 });
 
