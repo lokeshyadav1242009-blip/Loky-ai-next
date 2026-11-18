@@ -1,0 +1,650 @@
+/* ===========================================================================
+   LOKY AI NEXT — MEMORY + RICH RESPONS
+   Emerald Gaming theme extensions. Everything here is additive: no existing
+   selector is redefined, so the current layout cannot regress from this file.
+   =========================================================================== */
+
+/* -------------------------------------------------------------------------- */
+/* Rich content: maths                                                       */
+/* -------------------------------------------------------------------------- */
+
+.math__holder {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+}
+
+.math__holder--block {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 12px 0;
+  padding: 12px 14px;
+  border: 1px solid var(--emerald-line, rgba(25, 230, 140, 0.16));
+  border-radius: 12px;
+  background: rgba(6, 18, 13, 0.72);
+  overflow-x: auto;
+}
+
+.math--block {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.math--inline {
+  padding: 0 1px;
+  vertical-align: baseline;
+}
+
+.math__fallback {
+  font-family: var(--mono, ui-monospace, monospace);
+  font-size: 0.92em;
+  color: var(--emerald-3, #34d399);
+  word-break: break-word;
+}
+
+.math__copy {
+  flex: 0 0 auto;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: upper-case;
+  color: var(--text-faint, rgba(226, 240, 233, 0.6));
+  background: transparent;
+  border: 1px solid var(--emerald-line, rgba(25, 230, 140, 0.18));
+  border-radius: 999px;
+  padding: 3px 9px;
+  cursor: pointer;
+  transition: color 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+}
+
+.math__copy:hover,
+.math__copy:focus-visible {
+  color: var(--emerald, #19e68c);
+  border-color: var(--emerald-line-strong, rgba(25, 230, 140, 0.45));
+  background: rgba(25, 230, 140, 0.08);
+  outline: none;
+}
+
+.math__copy:active {
+  transform: scale(0.96);
+}
+
+/* KaTeX inherits the bubble colour rather than forcing black text. */
+.katex,
+.katex-display {
+  color: inherit;
+}
+
+.katex-display {
+  display: block;
+  margin: 0;
+  text-align: center;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Rich content: long answers                                                */
+/* -------------------------------------------------------------------------- */
+
+.rich--long:not(.rich--expanded) {
+  max-height: 430px;
+  overflow: hidden;
+  position: relative;
+  mask-image: linear-gradient(to bottom, #000 68%, transparent 100%);
+}
+
+.rich__expand {
+  display: block;
+  width: 100%;
+  margin-top: 10px;
+  padding: 8px 0;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  color: var(--emerald, #19e68c);
+  background: rgba(25, 230, 140, 0.07);
+  border: 1px solid var(--emerald-line, rgba(25, 230, 140, 0.2));
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.rich__expand:hover {
+  background: rgba(25, 230, 140, 0.13);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Richer Markdown: tables, quotes, code                                      */
+/* -------------------------------------------------------------------------- */
+
+.msg__content table {
+  width: 100%;
+  margin: 12px 0;
+  border-collapse: collapse;
+  font-size: 0.86rem;
+  display: block;
+  overflow-x: auto;
+}
+
+.msg__content thead th {
+  position: sticky;
+  top: 0;
+  background: rgba(10, 28, 20, 0.96);
+  font-weight: 700;
+  text-align: left;
+}
+
+.msg__content th,
+.msg__content td {
+  padding: 8px 11px;
+  border: 1px solid rgba(25, 230, 140, 0.14);
+  vertical-align: top;
+}
+
+.msg__content tbody tr:nh-child(even) {
+  background: rgba(25, 230, 140, 0.035);
+}
+
+.msg__content block-quote {
+  margin: 12px 0;
+  padding: 8px 14px;
+  border-left: 3px solid var(--emerald, #19e68c);
+  background: rgba(25, 230, 140, 0.06);
+  border-radius: 0 10px 10px 0;
+  color: var(--text-dim, rgba(226, 240, 233, 0.86));
+}
+
+.msg__content hr {
+  border: none;
+  border-top: 1px solid rgba(25, 230, 140, 0.18);
+  margin: 16px 0;
+}
+
+.msg__content h3,
+.msg__content h4,
+.msg__content h5 {
+  margin: 16px 0 6px;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+}
+
+.msg__content h3 {
+  font-size: 1.04rem;
+  color: var(--emerald, #19e68c);
+}
+
+.msg__content h4 {
+  font-size: 0.96rem;
+}
+
+.msg__content ul,
+.msg__content ol {
+  margin: 8px 0 8px 20px;
+  padding: 0;
+}
+
+.msg__content li {
+  margin: 4px 0;
+}
+
+.msg__content li::marker {
+  color: var(--emerald, #19e68c);
+}
+
+/* -------------------------------------------------------------------------- */
+/* LOKY MEMORY page                                                          */
+/* -------------------------------------------------------------------------- */
+
+.memory {
+  display: block;
+  width: 100%;
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 24px 18px 96px;
+  color: var(--text, #e6f2ec);
+}
+
+.memory[hidden] {
+  display: none;
+}
+
+.memory__shell {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.memory__head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.memory__title {
+  margin: 0;
+  font-size: 1.18rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: var(--emerald, #19e68c);
+}
+
+.memory__sub {
+  margin: 4px 0 0;
+  font-size: 0.8rem;
+  color: var(--text-faint, rgba(226, 240, 233, 0.6));
+}
+
+.memory__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  cursor: pointer;
+  font-size: 0.8rem;
+  color: var(--text-dim, rgba(226, 240, 233, 0.86));
+  user-select: none;
+}
+
+.memory__toggle input {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+}
+
+.memory__toggle-track {
+  width: 40px;
+  height: 22px;
+  border-radius: 999px;
+  background: rgba(120, 150, 135, 0.28);
+  border: 1px solid rgba(25, 230, 140, 0.22);
+  position: relative;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.memory__toggle-track::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #cfe6da;
+  transition: transform 0.2s ease, background 0.2s ease;
+}
+
+.memory__toggle input:checked + .memory__toggle-track {
+  background: rgba(25, 230, 140, 0.32);
+  border-color: var(--emerald, #19e68c);
+}
+
+.memory__toggle input:checked + .memory__toggle-track::after {
+  transform: translateX(18px);
+  background: var(--emerald-3, #34d399);
+}
+
+.memory__toggle input:focus-visible + .memory__toggle-track {
+  outline: 2px solid var(--emerald-3, #34d399);
+  outline-offset: 2px;
+}
+
+.memory__banner {
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-size: 0.8rem;
+  border: 1px solid rgba(25, 230, 140, 0.2);
+  background: rgba(25, 230, 140, 0.07);
+  color: var(--text-dim, rgba(226, 240, 233, 0.88));
+}
+
+.memory__banner--error {
+  border-color: rgba(255, 120, 120, 0.4);
+  background: rgba(255, 90, 90, 0.1);
+}
+
+.memory__composer {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(25, 230, 140, 0.16);
+  background: rgba(6, 18, 13, 0.72);
+}
+
+.memory__input,
+.memory__select,
+.memory__search {
+  width: 100%;
+  font-family: inherit;
+  font-size: 0.86rem;
+  color: var(--text, #e6f2ec);
+  background: rgba(3, 8, 6, 0.72);
+  border: 1px solid rgba(25, 230, 140, 0.18);
+  border-radius: 10px;
+  padding: 9px 11px;
+}
+
+.memory__input {
+  resize: vertical;
+  min-height: 54px;
+  line-height: 1.5;
+}
+
+.memory__input:focus,
+.memory__select:focus,
+.memory__search:focus {
+  outline: none;
+  border-color: var(--emerald, #19e68c);
+  box-shadow: 0 0 0 3px rgba(25, 230, 140, 0.13);
+}
+
+.memory__composer-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.memory__select {
+  width: auto;
+  min-width: 150px;
+  flex: 1 1 150px;
+}
+
+.memory__save {
+  flex: 0 0 auto;
+  padding: 9px 18px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #03110b;
+  background: linear-gradient(135deg, #34d399, #19e68c);
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba(25, 230, 140, 0.24);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.memory__save:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(25, 230, 140, 0.34);
+}
+
+.memory__save:active {
+  transform: scale(0.97);
+}
+
+.memory__save:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.memory__cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, min-max(132px, 1fr));
+  gap: 10px;
+}
+
+.memory__card {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 13px;
+  border-radius: 12px;
+  border: 1px solid rgba(25, 230, 140, 0.14);
+  background: rgba(6, 18, 13, 0.6);
+  color: var(--text-dim, rgba(226, 240, 233, 0.86));
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: border-color 0.18s ease, background 0.18s ease, transform 0.18s ease;
+}
+
+.memory__card:hover {
+  transform: translateY(-1px);
+  border-color: rgba(25, 230, 140, 0.34);
+}
+
+.memory__card.is-active {
+  border-color: var(--emerald, #19e68c);
+  background: rgba(25, 230, 140, 0.12);
+  color: var(--emerald-3, #34d399);
+  box-shadow: 0 0 0 1px rgba(25, 230, 140, 0.3) inset;
+}
+
+.memory__card-icon {
+  font-size: 0.95rem;
+}
+
+.memory__card-label {
+  flex: 1 1 auto;
+  text-align: left;
+}
+
+.memory__card-count {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--emerald, #19e68c);
+}
+
+.memory__filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.memory__search {
+  flex: 1 1 220px;
+}
+
+.memory__meta {
+  margin: 0;
+  font-size: 0.74rem;
+  color: var(--text-faint, rgba(226, 240, 233, 0.55));
+  white-space: nowrap;
+}
+
+.memory__list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.memory__item {
+  padding: 13px 15px;
+  border-radius: 12px;
+  border: 1px solid rgba(25, 230, 140, 0.13);
+  background: rgba(6, 18, 13, 0.62);
+  animation: memory-in 0.24s ease both;
+}
+
+.memory__item.is-pinned {
+  border-color: rgba(25, 230, 140, 0.4);
+  background: rgba(25, 230, 140, 0.06);
+}
+
+.memory__item-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.memory__badge {
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: upper-case;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(25, 230, 140, 0.3);
+  color: var(--emerald-3, #34d399);
+}
+
+.memory__badge--study {
+  border-color: rgba(90, 190, 255, 0.35);
+  color: #7cc8ff;
+}
+
+.memory__badge--projects {
+  border-color: rgba(255, 200, 90, 0.35);
+  color: #ffd06b;
+}
+
+.memory__badge--preferences {
+  border-color: rgba(190, 150, 255, 0.35);
+  color: #c9aaff;
+}
+
+.memory__date {
+  font-size: 0.7rem;
+  color: var(--text-faint, rgba(226, 240, 233, 0.5));
+}
+
+.memory__item-text {
+  margin: 0 0 8px;
+  font-size: 0.88rem;
+  line-height: 1.55;
+  word-break: break-word;
+}
+
+.memory__item-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.memory__ghost,
+.memory__danger {
+  font-size: 0.74rem;
+  font-weight: 600;
+  padding: 5px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  background: transparent;
+  border: 1px solid rgba(25, 230, 140, 0.2);
+  color: var(--text-dim, rgba(226, 240, 233, 0.82));
+  transition: color 0.16s ease, border-color 0.16s ease, background 0.16s ease;
+}
+
+.memory__ghost:hover {
+  color: var(--emerald-3, #34d399);
+  border-color: rgba(25, 230, 140, 0.45);
+  background: rgba(25, 230, 140, 0.07);
+}
+
+.memory__ghost--danger:hover,
+.memory__danger {
+  color: #ff8f8f;
+  border-color: rgba(255, 120, 120, 0.45);
+  background: rgba(255, 90, 90, 0.1);
+}
+
+.memory__confirm {
+  font-size: 0.74rem;
+  color: #ff8f8f;
+}
+
+.memory__edit {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.memory__empty {
+  padding: 26px 18px;
+  text-align: center;
+  border: 1px dashed rgba(25, 230, 140, 0.2);
+  border-radius: 12px;
+  background: rgba(6, 18, 13, 0.4);
+}
+
+.memory__empty-title {
+  margin: 0 0 6px;
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: var(--emerald-3, #34d399);
+}
+
+.memory__empty-text {
+  margin: 0;
+  font-size: 0.8rem;
+  line-height: 1.55;
+  color: var(--text-faint, rgba(226, 240, 233, 0.6));
+}
+
+.memory__notice {
+  position: fixed;
+  left: 50%;
+  bottom: 22px;
+  transform: translateX(-50%);
+  margin: 0;
+  padding: 9px 16px;
+  font-size: 0.8rem;
+  border-radius: 999px;
+  color: #03110b;
+  background: var(--emerald, #19e68c);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  z-index: 60;
+  animation: memory-in 0.2s ease both;
+}
+
+@keyframes memory-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Mobile                                                                     */
+/* -------------------------------------------------------------------------- */
+
+@media (max-width: 640px) {
+  .memory {
+    padding: 18px 13px 104px;
+  }
+
+  .memory__cards {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .memory__toggle-text {
+    display: none;
+  }
+
+  .math__holder--block {
+    padding: 10px;
+  }
+
+  .rich--long:not(.rich--expanded) {
+    max-height: 340px;
+  }
+}
+
+/* Respect the OS reduced-motion setting: no transforms, no fades. */
+@media (prefers-reduced-motion: reduce) {
+  .memory__item,
+  .memory__notice {
+    animation: none;
+  }
+
+  .memory__card,
+  .memory__save,
+  .memory__ghost,
+  .math__copy {
+    transition: none;
+  }
+}

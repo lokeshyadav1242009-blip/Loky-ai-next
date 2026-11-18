@@ -13,6 +13,9 @@ import { requireAuth } from './auth.js';
 import { isMaintenanceOn, maintenanceSnapshot } from './maintenance.js';
 import { parseSuperAdminIds, SUPER_ADMIN_ENV } from './superadmin.js';
 import { isAssetPath } from './asset-path.js';
+import { createMemoryRouter } from './memory-routes.js';
+import { bearerToken } from './memory-routes.js';
+import { memoryBlockForRequest } from './memory.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const publicDir = path.resolve(__dirname, '..', 'public');
@@ -134,6 +137,10 @@ app.get('/admin', (req, res) => {
 });
 
 app.use('/api/admin', createAdminRouter());
+
+// LOKY MEMORY: per-user rows read and written with the caller's own token, so
+// PostgREST RLS is the boundary. Mounted after requireAuth inside the router.
+app.use('/api/memories', createMemoryRouter());
 
 const limiter = createRateLimiter({
   max: config.limits.rateLimitMax,

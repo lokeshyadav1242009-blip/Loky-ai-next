@@ -42,6 +42,8 @@ import {
   planDownscale,
   selectImages,
 } from './chat-images.js';
+import { extractMath, isLongAnswer, mathTokenPattern } from './rich-text.js';
+import { initMemoryUI, openMemory, resetMemory } from './memory-ui.js';
 
 
 const HEALTH_REFRESH_MS = 60000;
@@ -197,6 +199,153 @@ function decorateCodeBlocks(container) {
     block.append(bar, pre);
   });
 }
+
+/* -------------------------------------------------------------------------- */
+/* Rich response rendering                                                    */
+/* -------------------------------------------------------------------------- */
+/* KaTeX is loaded lazily so a missing vendor build degrades to plain TeX
+   instead of breaking the whole module graph. */
+
+let katexPromise = null;
+
+function loadKatex() {
+  if (!katexPromise) {
+    katexPromise = (async () => {
+      for (const spec of ['./vendor/katex/katex.mjs', './vendor/katex/katex.min.js']) {
+        try {
+          const mod = await import(spec);
+          const lib = mod.default ?? mod;
+          if (typeof lib?.renderToString === 'function') return lib;
+        } catch {
+          /* try the next build */
+        }
+      }
+      return null;
+    })();
+  }
+  return katexPromise;
+}
+
+/**
+ * Replace maths placeholders with rendered maths.
+ *
+ * Runs *after* Markdown and DOMPurify: KaTeX's own markup never passes through
+ * the purifier (which would strip its inline styles), and the surrounding text
+ * is already sanitised.
+ */
+function paintMath(container, math) {
+  if (!math || math.length === 0) return;
+  const pattern = mathTokenPattern();
+  const walker = document.createTreeWalker(container, Node.SHOW_TEXT);
+  const targets = [];
+  while (walker.nextNode()) {
+    const node = walker.currentNode;
+    pattern.lastIndex = 0;
+    if (node.nodeValue && pattern.test(node.nodeValue)) targets.push(node);
+  }
+  if (targets.length === 0) return;
+
+  const build = (tex, display) => {
+    const wrap = document.createElement(display ? 'div' : 'span');
+    wrap.className = display ? 'math math--block' : 'math math--inline';
+    wrap.dataset.tex = tex;
+
+    const lib = katexCache;
+    let rendered = false;
+    if (lib) {
+      try {
+        const html = lib.renderToString(tex, {
+          displayMode: display,
+          throwOnError: false,
+          strict: false,
+          trust: false,
+          output: 'html',
+        });
+        wrap.innerHTML = html;
+        rendered = true;
+      } catch {
+        rendered = false;
+      }
+    }
+    if (!rendered) {
+      const fallback = document.createElement('code');
+      fallback.className = 'math__fallback';
+      fallback.textContent = tex;
+      wrap.append(fallback);
+    }
+
+    const copy = document.createElement('button');
+    copy.type = 'button';
+    copy.className = 'math__copy';
+    copy.textContent = 'Copy';
+    copy.setAttribute('aria-label', 'Copy this equation');
+    copy.addEventListener('click', async (event) => {
+      event.stopPropagation();
+      const ok = await copyText(display ? `$$${tex}$$` : `$${tex}$`);
+      copy.textContent = ok ? 'Copied' : 'Failed';
+      setTimeout(() => { copy.textContent = 'Copy'; }, 1500);
+    });
+
+    const holder = document.createElement(display ? 'div' : 'span');
+    holder.className = display ? 'math__holder math__holder--block' : 'math__holder';
+    holder.append(wrap, copy);
+    return holder;
+  };
+
+  for (const node of targets) {
+    const fragment = document.createDocumentFragment();
+    const text = node.nodeValue;
+    let cursor = 0;
+    pattern.lastIndex = 0;
+    let match;
+    while ((match = pattern.exec(text))) {
+      if (match.index > cursor) fragment.append(document.createTextNode(text.slice(cursor, match.index)));
+      const entry = math[Number(match[1])];
+      if (entry) fragment.append(build(entry.tex, entry.display));
+      else fragment.append(document.createTextNode(match[0]));
+      cursor = match.index + match[0].length;
+    }
+    if (cursor < text.length) fragment.append(document.createTextNode(text.slice(cursor)));
+    node.replaceWith(fragment);
+  }
+}
+
+/** Collapse very long answers behind an explicit expand control. */
+function decorateLongAnswer(container) {
+  const text = container.textContent || '';
+  if (!isLongAnswer(text)) return;
+  container.classList.add('rich--long');
+
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'rich__expand';
+  btn.textContent = 'Show full answer';
+  btn.addEventListener('click', () => {
+    const expanded = container.classList.togge('rich--expanded');
+    btn.textContent = expanded ? 'Show less' : 'Show full answer';
+  });
+  container.append(btn);
+}
+
+/** One entry point for every assistant answer, live or replayed from history. */
+function renderRich(element, markdown) {
+  const { text, math } = extractMath(markdown || '');
+  element.innerHTML = renderMarkdown(text);
+  decorateCodeBlocks(element);
+  decorateLongAnswer(element);
+  if (math.length) {
+    if (katexCache) {
+      paintMath(element, math);
+    } else {
+      loadKatex().then((lib) => {
+        katexCache = lib;
+        paintMath(element, math);
+      });
+    }
+  }
+}
+
+let katexCache = null;
 
 async function copyText(text) {
   try {
@@ -548,8 +697,7 @@ function buildMessageElement(message, index) {
     body.textContent = message.content;
   } else {
     body.className = 'md';
-    body.innerHTML = renderMarkdown(message.content);
-    decorateCodeBlocks(body);
+    renderRich(body, message.content);
   }
   content.append(body);
 
@@ -1253,8 +1401,7 @@ async function requestReply(conversation) {
     renderQueued = true;
     requestAnimationFrame(() => {
       renderQueued = false;
-      md.innerHTML = renderMarkdown(latest);
-      decorateCodeBlocks(md);
+      renderRich(md, latest);
       const caret = document.createElement('span');
       caret.className = 'caret';
       md.append(caret);
@@ -1299,8 +1446,7 @@ async function requestReply(conversation) {
       }, 1500);
     });
 
-    md.innerHTML = renderMarkdown(latest);
-    decorateCodeBlocks(md);
+    renderRich(md, latest);
     if (result.aborted) {
       const note = document.createElement('p');
       note.style.cssText = 'margin:6px 0 0;font-size:.72rem;color:var(--text-faint);';
@@ -1593,7 +1739,8 @@ el.scrim.addEventListener('click', closeSidebar);
 let activeSection = 'assistant';
 
 function setSection(section) {
-  const next = section === 'messages' ? 'messages' : 'assistant';
+  const next =
+    section === 'messages' ? 'messages' : section === 'memory' ? 'memory' : 'assistant';
   // Route guard: while the gate is locked, no section may be opened — not from
   // a nav click, not from a deep link, not from a leftover hash. The server and
   // RLS enforce this too; this only stops the UI from pretending otherwise.
@@ -1602,13 +1749,14 @@ function setSection(section) {
 
   activeSection = next;
   const showMessages = next === 'messages';
+  const showMemory = next === 'memory';
 
   // Messages is its own screen, so it owns a history entry: Back returns to the
   // assistant instead of leaving the app.
   if (showMessages) openLayer('messages', () => setSection('assistant'));
   else closeLayer('messages');
 
-  el.appShell.hidden = showMessages;
+  el.appShell.hidden = showMessages || showMemory;
   // The legacy localStorage messenger is retired: the Messages section now
   // renders LOKY CONNECT, which reads real Supabase conversations. The old node
   // stays in the DOM (hidden) so nothing that references it breaks.
@@ -1623,10 +1771,32 @@ function setSection(section) {
     closeConnect();
     leaveMessages();
   }
+
+  // LOKY MEMORY: its own screen, behind the same auth gate. Nothing is fetched
+  // until the section is actually opened.
+  if (showMemory) openMemory();
+  if (navMemoryButton) navMemoryButton.setAttribute('aria-selected', String(showMemory));
+  if (navAssistantButton) navAssistantButton.setAttribute('aria-selected', String(!showMessages && !showMemory));
 }
 
 el.navAssistant.addEventListener('click', () => setSection('assistant'));
 el.navMessages.addEventListener('click', () => setSection('messages'));
+
+/* ------------------------------- LOKY MEMORY ------------------------------ */
+
+const navMemoryButton = document.getElementById('navMemory');
+const navAssistantButton = el.navAssistant;
+
+if (navMemoryButton) {
+  navMemoryButton.addEventListener('click', () => {
+    closeSidebar();
+    setSection('memory');
+  });
+}
+
+// The page owns its own data; wire it once and let it fetch on first open.
+initMemoryUI();
+resetMemory();
 
 /* ---------------------------------- about --------------------------------- */
 
