@@ -52,7 +52,7 @@
   font-size: 0.68rem;
   font-weight: 600;
   letter-spacing: 0.04em;
-  text-transform: upper-case;
+  text-transform: uppercase;
   color: var(--text-faint, rgba(226, 240, 233, 0.6));
   background: transparent;
   border: 1px solid var(--emerald-line, rgba(25, 230, 140, 0.18));
@@ -144,11 +144,11 @@
   vertical-align: top;
 }
 
-.msg__content tbody tr:nh-child(even) {
+.msg__content tbody tr:nth-child(even) {
   background: rgba(25, 230, 140, 0.035);
 }
 
-.msg__content block-quote {
+.msg__content blockquote {
   margin: 12px 0;
   padding: 8px 14px;
   border-left: 3px solid var(--emerald, #19e68c);
@@ -388,7 +388,7 @@
 
 .memory__cards {
   display: grid;
-  grid-template-columns: repeat(auto-fit, min-max(132px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
   gap: 10px;
 }
 
@@ -481,7 +481,7 @@
   font-size: 0.66rem;
   font-weight: 700;
   letter-spacing: 0.06em;
-  text-transform: upper-case;
+  text-transform: uppercase;
   padding: 2px 8px;
   border-radius: 999px;
   border: 1px solid rgba(25, 230, 140, 0.3);
