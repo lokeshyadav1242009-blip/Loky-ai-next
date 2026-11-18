@@ -54,7 +54,7 @@ export function buildPayload(config, messages) {
     return {
       contents: messages.map((m) => ({
         role: m.role === 'assistant' ? 'model' : 'user',
-        parts: [{ text: m.content }],
+        parts: buildGeminiParts(m),
       })),
       ...(systemPrompt
         ? { systemInstruction: { parts: [{ text: systemPrompt }] } }
@@ -66,9 +66,10 @@ export function buildPayload(config, messages) {
     };
   }
 
-  const payloadMessages = systemPrompt
-    ? [{ role: 'system', content: systemPrompt }, ...messages]
-    : [...messages];
+  const payloadMessages = [
+    ...(systemPrompt ? [{ role: 'system', content: systemPrompt }] : []),
+    ...messages.map(toOpenAiMessage),
+  ];
 
   return {
     model,
@@ -77,6 +78,43 @@ export function buildPayload(config, messages) {
     temperature,
     max_tokens: maxTokens,
   };
+}
+
+/**
+ * Gemini content parts for one internal message.
+ *
+ * Images travel as inlineData (raw base64 bytes) — never as a file name or a
+ * URL — so the model genuinely receives the picture. An image-only turn keeps
+ * at least one part, because Gemini rejects an empty parts array.
+ */
+export function buildGeminiParts(message) {
+  const parts = [];
+  const text = typeof message?.content === 'string' ? message.content : '';
+  if (text) parts.push({ text });
+  for (const image of Array.isArray(message?.images) ? message.images : []) {
+    if (!image?.data || !image?.mimeType) continue;
+    parts.push({ inlineData: { mimeType: image.mimeType, data: image.data } });
+  }
+  if (parts.length === 0) parts.push({ text: '' });
+  return parts;
+}
+
+/** OpenAI-compatible content: text plus data-URL image parts when present. */
+function toOpenAiMessage(message) {
+  const images = Array.isArray(message?.images) ? message.images : [];
+  if (images.length === 0) {
+    return { role: message.role, content: message.content };
+  }
+  const content = [];
+  if (message.content) content.push({ type: 'text', text: message.content });
+  for (const image of images) {
+    if (!image?.data || !image?.mimeType) continue;
+    content.push({
+      type: 'image_url',
+      image_url: { url: `data:${image.mimeType};base64,${image.data}` },
+    });
+  }
+  return { role: message.role, content };
 }
 
 /**

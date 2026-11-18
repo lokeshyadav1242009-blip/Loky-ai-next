@@ -228,6 +228,9 @@ export function loadConfig(env = process.env) {
       rateLimitWindowMs: int(env.RATE_LIMIT_WINDOW_MS, 60000, 1000, 3600000),
       maxInputChars: int(env.MAX_INPUT_CHARS, 24000, 1000, 200000),
       maxMessages: int(env.MAX_MESSAGES, 40, 2, 200),
+      // Image attachments: capped so one request can never balloon.
+      maxImagesPerMessage: int(env.MAX_IMAGES_PER_MESSAGE, 4, 1, 8),
+      maxImageBase64Chars: int(env.MAX_IMAGE_BASE64_CHARS, 2400000, 100000, 6000000),
     },
   };
 }

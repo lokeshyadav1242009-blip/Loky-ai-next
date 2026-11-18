@@ -51,7 +51,10 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use(express.json({ limit: '1mb' }));
+// Larger than a plain text body because /api/chat accepts up to four inline
+// base64 images per message (each capped in server/validate.js). The JSON
+// parser limit is only the outer envelope; per-image limits do the real work.
+app.use(express.json({ limit: '12mb' }));
 
 /* --------------------------------- routes --------------------------------- */
 
