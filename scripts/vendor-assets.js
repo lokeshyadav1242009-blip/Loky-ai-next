@@ -6,7 +6,7 @@
  * the page, no SRI bookkeeping), and no bundler/build step is required.
  * Runs automatically on `npm install` via the postinstall script.
  */
-import { copyFile, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -32,6 +32,16 @@ const ASSETS = [
     target: 'purify.esm.js',
   },
 ];
+
+/**
+ * KaTeX is vendored as a directory rather than a single file: the stylesheet
+ * references `fonts/KaTeX_*.woff2` relatively, so the fonts must land in
+ * public/vendor/katex/fonts next to the CSS or maths renders in a fallback
+ * serif face. Served from our own origin, which is what CSP font-src allows.
+ */
+const KATEX_CSS = ['node_modules/katex/dist/katex.min.css'];
+const KATEX_SCRIPT = ['node_modules/katex/dist/katex.mjs', 'node_modules/katex/dist/katex.min.js'];
+const KATEX_FONTS = 'node_modules/katex/dist/fonts';
 
 export async function vendorAssets({ quiet = false } = {}) {
   await mkdir(vendorDir, { recursive: true });
@@ -60,7 +70,56 @@ export async function vendorAssets({ quiet = false } = {}) {
     const copied = results.filter((r) => r.copied).length;
     console.log(`[vendor] ${copied}/${ASSETS.length} browser assets ready in public/vendor`);
   }
+
+  await vendorKatex({ quiet, results });
+
   return results;
+}
+
+/** Copy katex.min.css + katex.mjs + every font it references. */
+async function vendorKatex({ quiet, results }) {
+  const katexDir = path.join(vendorDir, 'katex');
+  const css = KATEX_CSS.map((s) => path.join(root, s)).find(existsSync);
+  const script = KATEX_SCRIPT.map((s) => path.join(root, s)).find(existsSync);
+
+  if (!css || !script) {
+    results.push({ asset: 'katex', copied: false });
+    if (!quiet) {
+      console.warn('[vendor] katex not found in node_modules - run "npm install" first.');
+    }
+    return;
+  }
+
+  await mkdir(katexDir, { recursive: true });
+  await copyFile(css, path.join(katexDir, 'katex.min.css'));
+
+  // Keep the ESM build's name stable so the frontend import cannot drift.
+  const scriptName = script.endsWith('.mjs') ? 'katex.mjs' : 'katex.min.js';
+  await copyFile(script, path.join(katexDir, scriptName));
+
+  const fontsSource = path.join(root, KATEX_FONTS);
+  let fonts = 0;
+  if (existsSync(fontsSource)) {
+    const fontsDir = path.join(katexDir, 'fonts');
+    await mkdir(fontsDir, { recursive: true });
+    for (const file of await readdir(fontsSource)) {
+      if (!/\.(woff2?|ttf)$/i.test(file)) continue;
+      await copyFile(path.join(fontsSource, file), path.join(fontsDir, file));
+      fonts += 1;
+    }
+  }
+
+  results.push({
+    asset: 'katex',
+    copied: true,
+    script: scriptName,
+    fonts,
+    target: path.relative(root, katexDir),
+  });
+
+  if (!quiet) {
+    console.log(`[vendor] katex ready (${scriptName}, ${fonts} fonts) in public/vendor/katex`);
+  }
 }
 
 if (process.argv[1] && process.argv[1].endsWith('vendor-assets.js')) {
