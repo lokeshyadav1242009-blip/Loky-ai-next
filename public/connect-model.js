@@ -29,7 +29,8 @@ const VIDEO_TYPES = ['video/mp4', 'video/webm', 'video/quicktime'];
 
 /** Clamp an unknown tab id to a real one. */
 export function normalizeTab(id) {
-  const found = CONNECT_TABS.find((tab) => tab.id === id);
+  const wanted = String(id == null ? '' : id).trim().toLowerCase();
+  const found = CONNECT_TABS.find((tab) => tab.id === wanted);
   return found ? found.id : 'chats';
 }
 
@@ -72,7 +73,7 @@ export function initials(name) {
   if (parts.length >= 2) {
     return (parts[0][0] + parts[1][0]).toUpperCase();
   }
-  return clean.slice(0, 2).toUpperCase();
+  return clean.slice(0, 1).toUpperCase();
 }
 
 /** Stable hue (0-359) from a seed, so an avatar keeps its colour. */
@@ -196,7 +197,12 @@ export function totalUnread(rows) {
 /** Pending incoming request count (drives the Requests badge). */
 export function pendingIncoming(requests) {
   const list = Array.isArray(requests) ? requests : [];
-  return list.filter((row) => row && row.direction === 'in' && row.status === 'pending').length;
+  return list.filter(
+    (row) =>
+      Boolean(row) &&
+      (row.direction === 'incoming' || row.direction === 'in') &&
+      row.status === 'pending'
+  ).length;
 }
 
 /** Notification line for the bell list. */
@@ -238,9 +244,12 @@ export function buildSendPayload({ text, attachment, replyTo } = {}) {
 export function friendAction(status, isSelf) {
   if (isSelf) return { label: 'You', disabled: true, action: 'none' };
   switch (status) {
+    case 'friends':
     case 'friend':
     case 'accepted':
       return { label: 'Message', disabled: false, action: 'message' };
+    case 'self':
+      return { label: 'You', disabled: true, action: 'none' };
     case 'pending_out':
       return { label: 'Requested', disabled: true, action: 'none' };
     case 'pending_in':

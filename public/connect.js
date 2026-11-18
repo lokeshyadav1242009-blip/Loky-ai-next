@@ -455,10 +455,15 @@ function renderFriends() {
   }
 }
 
+const isIncoming = (row) => Boolean(row) && (row.direction === 'incoming' || row.direction === 'in');
+const isOutgoing = (row) => Boolean(row) && (row.direction === 'outgoing' || row.direction === 'out');
+
 function renderRequests() {
   if (!dom.reqIncoming) return;
-  const incoming = state.requestRows.filter((r) => r.direction === 'in');
-  const outgoing = state.requestRows.filter((r) => r.direction === 'out');
+  // my_friend_requests() reports 'incoming'/'outgoing'; the short forms are
+  // tolerated so a changed payload can never silently empty this tab.
+  const incoming = state.requestRows.filter(isIncoming);
+  const outgoing = state.requestRows.filter(isOutgoing);
 
   clear(dom.reqIncoming);
   dom.reqIncomingEmpty.hidden = incoming.length > 0;
@@ -486,7 +491,7 @@ function requestRow(req, actions) {
   body.append(avatarNode(req.other_username, req.other_username, req.other_avatar_seed, 'sm'));
   const text = h('div', 'connect-req__text');
   text.append(h('strong', null, req.other_display_name || `@${req.other_username}`));
-  text.append(h('span', 'connect-req__note', req.note || (req.direction === 'in' ? 'wants to connect' : 'request pending')));
+  text.append(h('span', 'connect-req__note', req.note || (isIncoming(req) ? 'wants to connect' : 'request pending')));
   body.append(text);
 
   const wrap = h('div', 'connect-req__actions');
