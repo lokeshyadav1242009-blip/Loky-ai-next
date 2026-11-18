@@ -24,7 +24,8 @@ import {
   serializeConversations,
   titleFrom,
 } from './chat-utils.js';
-import { initMessages, leaveMessages } from './messages.js';
+import { leaveMessages } from './messages.js';
+import { open as openConnect, close as closeConnect } from './connect.js';
 import { initProfileUI } from './direct-messages.js';
 import { initAuthGate, isUnlocked, openAuthGate } from './auth-gate.js';
 import { initFriendsUI } from './friends-ui.js';
@@ -1327,14 +1328,18 @@ function setSection(section) {
   else closeLayer('messages');
 
   el.appShell.hidden = showMessages;
-  el.messenger.hidden = !showMessages;
+  // The legacy localStorage messenger is retired: the Messages section now
+  // renders LOKY CONNECT, which reads real Supabase conversations. The old node
+  // stays in the DOM (hidden) so nothing that references it breaks.
+  el.messenger.hidden = true;
 
   el.navAssistant.setAttribute('aria-selected', String(!showMessages));
   el.navMessages.setAttribute('aria-selected', String(showMessages));
 
   if (showMessages) {
-    initMessages();
+    openConnect();
   } else {
+    closeConnect();
     leaveMessages();
   }
 }

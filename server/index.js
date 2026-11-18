@@ -35,7 +35,10 @@ app.use((req, res, next) => {
       "default-src 'self'",
       "script-src 'self'",
       "style-src 'self' 'unsafe-inline'",
-      "img-src 'self' data:",
+      // Supabase Storage serves signed media from the project origin, and blob:
+      // covers the local preview of a file chosen but not yet uploaded.
+      "img-src 'self' data: blob: https://jqnzfuimnkghwqccyosw.supabase.co",
+      "media-src 'self' blob: https://jqnzfuimnkghwqccyosw.supabase.co",
       "font-src 'self' data:",
       // Mini Chat talks to Supabase Auth + PostgREST directly from the browser.
       // One origin covers both; nothing else is opened up.
