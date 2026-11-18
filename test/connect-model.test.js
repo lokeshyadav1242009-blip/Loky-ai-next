@@ -47,7 +47,7 @@ test('validateAttachment accepts images and videos inside the limits', () => {
 test('validateAttachment rejects unsupported types and oversize files', () => {
   const pdf = validateAttachment({ type: 'application/pdf', size: 100, name: 'a.pdf' });
   assert.equal(pdf.ok, false);
-  assert.match(pdf.error, /image|video/i);
+  assert.match(pdf.error, /PNG|JPG|MP4/i);
 
   const huge = validateAttachment({ type: 'video/mp4', size: 500 * 1024 * 1024, name: 'a.mp4' });
   assert.equal(huge.ok, false);
@@ -75,12 +75,14 @@ test('totalUnread sums thread counts and ignores junk', () => {
 });
 
 test('pendingIncoming only counts incoming requests', () => {
+  // my_friend_requests() returns 'incoming'/'outgoing' plus a status column;
+  // only a pending incoming request should raise the Requests badge.
   const rows = [
-    { direction: 'in' },
-    { direction: 'out' },
-    { direction: 'in' },
+    { direction: 'incoming', status: 'pending' },
+    { direction: 'outgoing', status: 'pending' },
+    { direction: 'incoming', status: 'accepted' },
   ];
-  assert.equal(pendingIncoming(rows), 2);
+  assert.equal(pendingIncoming(rows), 1);
   assert.equal(pendingIncoming([]), 0);
 });
 

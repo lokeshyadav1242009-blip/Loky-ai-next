@@ -146,7 +146,7 @@ test('the top navigation switches between AI Assistant and Messages', () => {
 });
 
 test('app.js wires the section switch without unmounting the assistant', () => {
-  assert.match(js, /initMessages/);
+  assert.match(js, /openConnect/);
   assert.match(js, /leaveMessages/);
   assert.match(js, /function setSection/);
   // The assistant shell is hidden, never removed from the DOM.
