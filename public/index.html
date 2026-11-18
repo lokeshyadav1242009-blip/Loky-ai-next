@@ -310,7 +310,27 @@
         <section class="messages" id="messages" aria-live="polite" aria-relevant="additions text"></section>
 
         <div class="composer-wrap">
+          <div class="composer__previews" id="composerPreviews" hidden aria-live="polite"></div>
+
           <form class="composer" id="composer" autocomplete="off">
+            <button
+              class="composer__attach"
+              id="composerAttach"
+              type="button"
+              aria-label="Attach images"
+              title="Attach images (JPG, PNG, WEBP)"
+            >
+              <svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true">
+                <path
+                  d="M17.5 11.5 12 17a3.5 3.5 0 0 1-5-5l6-6a2.5 2.5 0 0 1 3.5 3.5l-6 6a1.5 1.5 0 0 1-2-2l5-5"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
+              </svg>
+            </button>
             <label class="sr-only" for="input">Your message</label>
             <textarea
               id="input"
@@ -337,9 +357,18 @@
             </button>
           </form>
 
+          <input
+            class="composer__file"
+            id="composerFile"
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            multiple
+            hidden
+          />
+
           <p class="composer__hint">
             <span class="kbd-hint">Enter</span> to send · <span class="kbd-hint">Shift</span> +
-            <span class="kbd-hint">Enter</span> for a new line ·
+            <span class="kbd-hint">Enter</span> for a new line · paste or drop an image to ask about it ·
             <button type="button" class="link-btn" id="stopBtn" hidden>Stop generating</button>
           </p>
         </div>

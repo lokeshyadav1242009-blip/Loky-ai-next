@@ -8,10 +8,19 @@
  * No dependencies. No secrets.
  */
 
+import { MAX_IMAGES_PER_MESSAGE, MAX_PAYLOAD_CHARS } from './chat-images.js';
+
 export const STORAGE_KEY = 'loky.ai.next.v1';
 export const MAX_STORED_CONVERSATIONS = 50;
 export const MAX_TITLE_LENGTH = 80;
 export const DEFAULT_TITLE = 'New chat';
+
+/**
+ * Total characters of image data kept in localStorage (~4.5 MB, well under the
+ * usual 5 MB origin quota). Older images are dropped from storage first so the
+ * text of a conversation is never lost to a QuotaExceededError.
+ */
+export const MAX_STORED_IMAGE_CHARS = 4500000;
 
 /* --------------------------------- ids ---------------------------------- */
 
@@ -120,6 +129,30 @@ export function formatTimestampLabel(value) {
 /* ------------------------------ persistence ----------------------------- */
 
 /**
+ * Validate + repair the `images` array of one stored message.
+ * Anything that is not a supported inline data URL is dropped, so a corrupted
+ * or hand-edited payload can never inject HTML/script through an <img src>.
+ */
+export function normalizeImages(raw) {
+  if (!Array.isArray(raw)) return [];
+  const out = [];
+  for (const item of raw) {
+    if (!item || typeof item !== 'object') continue;
+    const dataUrl = typeof item.dataUrl === 'string' ? item.dataUrl : '';
+    const match = /^data:(image\/(?:jpeg|png|webp));base64,[A-Za-z0-9+/=]+$/.exec(dataUrl);
+    if (!match) continue;
+    if (dataUrl.length > MAX_PAYLOAD_CHARS) continue;
+    out.push({
+      name: typeof item.name === 'string' ? item.name.slice(0, 120) : 'image',
+      mimeType: match[1],
+      dataUrl,
+    });
+    if (out.length >= MAX_IMAGES_PER_MESSAGE) break;
+  }
+  return out;
+}
+
+/**
  * Validate + repair conversations read back from localStorage so a corrupted
  * or hand-edited payload can never crash the app.
  */
@@ -143,11 +176,12 @@ export function normalizeConversations(raw) {
           (m.role === 'user' || m.role === 'assistant') &&
           typeof m.content === 'string',
       )
-      .map((m) => ({
-        role: m.role,
-        content: m.content,
-        error: Boolean(m.error),
-      }));
+      .map((m) => {
+        const images = normalizeImages(m.images);
+        return images.length
+          ? { role: m.role, content: m.content, error: Boolean(m.error), images }
+          : { role: m.role, content: m.content, error: Boolean(m.error) };
+      });
 
     out.push({
       id: item.id,
@@ -167,19 +201,44 @@ export function normalizeConversations(raw) {
  */
 export function serializeConversations(conversations, activeId = null) {
   const list = Array.isArray(conversations) ? conversations : [];
+  const kept = list.slice(0, MAX_STORED_CONVERSATIONS);
+
+  // Image data is far larger than text, so it gets a shared budget: newest
+  // messages keep their pictures, older ones keep their words. Without this a
+  // handful of photos would blow the localStorage quota and lose everything.
+  const imagesFor = new Map();
+  let remaining = MAX_STORED_IMAGE_CHARS;
+  const byRecency = [...kept].sort((a, b) => toTime(b?.updatedAt) - toTime(a?.updatedAt));
+  for (const conversation of byRecency) {
+    const messages = Array.isArray(conversation?.messages) ? conversation.messages : [];
+    for (let index = messages.length - 1; index >= 0; index -= 1) {
+      const message = messages[index];
+      if (!message || typeof message !== 'object') continue;
+      const images = normalizeImages(message.images);
+      if (images.length === 0) continue;
+      const cost = images.reduce((sum, image) => sum + image.dataUrl.length, 0);
+      if (cost <= remaining) {
+        imagesFor.set(message, images);
+        remaining -= cost;
+      } else {
+        imagesFor.set(message, []);
+      }
+    }
+  }
+
   return JSON.stringify({
     activeId: typeof activeId === 'string' && activeId ? activeId : null,
-    conversations: list.slice(0, MAX_STORED_CONVERSATIONS).map((c) => ({
+    conversations: kept.map((c) => ({
       id: c.id,
       title: c.title,
       createdAt: c.createdAt,
       updatedAt: c.updatedAt,
       messages: Array.isArray(c.messages)
-        ? c.messages.map((m) => ({
-            role: m.role,
-            content: m.content,
-            error: Boolean(m.error),
-          }))
+        ? c.messages.map((m) => {
+            const images = imagesFor.get(m) ?? [];
+            const base = { role: m.role, content: m.content, error: Boolean(m.error) };
+            return images.length ? { ...base, images } : base;
+          })
         : [],
     })),
   });
