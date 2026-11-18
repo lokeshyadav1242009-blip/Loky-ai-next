@@ -47,8 +47,13 @@ export function buildHeaders({ style, apiKey, provider }) {
  * Convert internal chat messages into the provider's payload.
  * `messages` is a validated array of { role: 'user'|'assistant', content }.
  */
-export function buildPayload(config, messages) {
+export function buildPayload(config, messages, options = {}) {
   const { style, model, systemPrompt, temperature, maxTokens } = config;
+  // Optional second system block (LOKY MEMORY). Kept separate from
+  // systemPrompt so every existing payload shape — and its tests — stays
+  // byte-identical when no extra context is supplied.
+  const systemExtra =
+    typeof options.systemExtra === 'string' ? options.systemExtra.trim() : '';
 
   if (style === 'gemini') {
     return {
@@ -56,8 +61,15 @@ export function buildPayload(config, messages) {
         role: m.role === 'assistant' ? 'model' : 'user',
         parts: buildGeminiParts(m),
       })),
-      ...(systemPrompt
-        ? { systemInstruction: { parts: [{ text: systemPrompt }] } }
+      ...(systemPrompt || systemExtra
+        ? {
+            systemInstruction: {
+              parts: [
+                ...(systemPrompt ? [{ text: systemPrompt }] : []),
+                ...(systemExtra ? [{ text: systemExtra }] : []),
+              ],
+            },
+          }
         : {}),
       generationConfig: {
         temperature,
@@ -68,6 +80,7 @@ export function buildPayload(config, messages) {
 
   const payloadMessages = [
     ...(systemPrompt ? [{ role: 'system', content: systemPrompt }] : []),
+    ...(systemExtra ? [{ role: 'system', content: systemExtra }] : []),
     ...messages.map(toOpenAiMessage),
   ];
 
