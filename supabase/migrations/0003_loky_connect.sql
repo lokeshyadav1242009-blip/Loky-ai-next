@@ -289,6 +289,46 @@ declare
   v_first text;
 begin
   v_first := split_part(coalesce(object_name, ''), '/', 1);
+
+  -- Profile pictures live at avatars/<user id>/… and any signed-in user may
+  -- read one, which is the point of an avatar. Writes are owner-only and are
+  -- enforced separately by connect_can_write_media().
+  if v_first = 'avatars' then
+    return true;
+  end if;
+
+  if v_first !~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$' then
+    return false;
+  end if;
+  return public.is_conversation_member(v_first::uuid);
+end;
+$$;
+
+-- Write side of the same rule: chat media may only be written by a member of
+-- the conversation whose id is the first path segment, and avatars only by the
+-- user whose id is the second segment.
+create or replace function public.connect_can_write_media(object_name text)
+returns boolean
+language plpgsql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_first  text;
+  v_second text;
+begin
+  if auth.uid() is null then
+    return false;
+  end if;
+
+  v_first  := split_part(coalesce(object_name, ''), '/', 1);
+  v_second := split_part(coalesce(object_name, ''), '/', 2);
+
+  if v_first = 'avatars' then
+    return v_second = auth.uid()::text;
+  end if;
+
   if v_first !~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$' then
     return false;
   end if;
@@ -682,7 +722,7 @@ create policy "connect media: read as member"
 create policy "connect media: upload as member"
   on storage.objects for insert
   to authenticated
-  with check (bucket_id = 'connect-media' and public.connect_can_read_media(name));
+  with check (bucket_id = 'connect-media' and public.connect_can_write_media(name));
 
 create policy "connect media: delete own"
   on storage.objects for delete
@@ -690,6 +730,8 @@ create policy "connect media: delete own"
   using (bucket_id = 'connect-media' and owner::text = auth.uid()::text);
 
 -- ── 14. execute grants ──────────────────────────────────────────────────────
+grant execute on function public.connect_can_read_media(text)            to authenticated;
+grant execute on function public.connect_can_write_media(text)           to authenticated;
 grant execute on function public.connect_threads()                       to authenticated;
 grant execute on function public.connect_messages(uuid, int)             to authenticated;
 grant execute on function public.connect_send_message(uuid, text, text, text, uuid) to authenticated;
