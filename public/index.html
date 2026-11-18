@@ -23,6 +23,8 @@
     <link rel="apple-touch-icon" href="/favicon.svg" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="stylesheet" href="/styles.css" />
+    <link rel="stylesheet" href="/vendor/katex/katex.min.css" />
+    <link rel="stylesheet" href="/upgrade.css" />
   </head>
   <!-- auth-locked is present in the markup on purpose: the shell must never be
        painted, even for one frame, before a session has been verified. The gate
@@ -271,6 +273,7 @@
 
         <div class="sidebar__foot">
           <span class="chip" id="modelChip" title="Active AI model">Loading model…</span>
+          <button class="link-btn sidebar__memory" id="navMemory" type="button" aria-selected="false">Memory</button>
           <button class="link-btn sidebar__about" id="aboutBtn" type="button">About</button>
           <span class="sidebar__note">History is stored in this browser only.</span>
         </div>
@@ -380,6 +383,11 @@
          public/connect.js. The legacy localStorage messenger further down is
          kept in the DOM but always hidden. -->
     <section class="connect" id="connect" hidden aria-label="LOKY CONNECT"></section>
+
+    <!-- ------------------------------ LOKY MEMORY ------------------------------ -->
+    <!-- Rendered entirely by public/memory-ui.js from the signed-in user's own
+         rows. Kept empty in markup so no memory is ever painted from HTML. -->
+    <section class="memory" id="memory" hidden aria-label="LOKY MEMORY"></section>
 
     <!-- ----------------------------- messages ----------------------------- -->
     <!-- Lightweight WhatsApp-style messenger living inside LOKY AI. Chats are

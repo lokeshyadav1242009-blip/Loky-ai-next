@@ -1775,8 +1775,9 @@ function setSection(section) {
   // LOKY MEMORY: its own screen, behind the same auth gate. Nothing is fetched
   // until the section is actually opened.
   if (showMemory) openMemory();
-  if (navMemoryButton) navMemoryButton.setAttribute('aria-selected', String(showMemory));
-  if (navAssistantButton) navAssistantButton.setAttribute('aria-selected', String(!showMessages && !showMemory));
+  const memoryNav = document.getElementById('navMemory');
+  if (memoryNav) memoryNav.setAttribute('aria-selected', String(showMemory));
+  el.navAssistant.setAttribute('aria-selected', String(!showMessages && !showMemory));
 }
 
 el.navAssistant.addEventListener('click', () => setSection('assistant'));
@@ -1797,6 +1798,11 @@ if (navMemoryButton) {
 // The page owns its own data; wire it once and let it fetch on first open.
 initMemoryUI();
 resetMemory();
+
+// The Memory screen replaces the chat shell, so it carries its own way back.
+document.getElementById('memory')?.addEventListener('click', (event) => {
+  if (event.target.closest('[data-memory-back]')) setSection('assistant');
+});
 
 /* ---------------------------------- about --------------------------------- */
 

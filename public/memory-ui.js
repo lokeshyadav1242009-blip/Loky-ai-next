@@ -267,6 +267,10 @@ function renderHeader() {
   const header = node('header', 'memory__head');
 
   const titles = node('div', 'memory__titles');
+  const back = node('button', 'memory__back', '\u2190 Chat');
+  back.type = 'button';
+  back.dataset.memoryBack = 'true';
+  back.setAttribute('aria-label', 'Back to the AI assistant');
   titles.append(
     node('h2', 'memory__title', 'LOKY MEMORY'),
     node('p', 'memory__sub', 'Facts you have shared, so the assistant can pick up where you left off.'),
@@ -284,7 +288,7 @@ function renderHeader() {
   toggleWrap.append(toggle, track, text);
   toggleWrap.title = 'When off, no memories are sent to the AI.';
 
-  header.append(titles, toggleWrap);
+  header.append(back, titles, toggleWrap);
   return header;
 }
 
