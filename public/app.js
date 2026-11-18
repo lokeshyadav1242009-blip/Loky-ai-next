@@ -32,6 +32,16 @@ import { initFriendsUI } from './friends-ui.js';
 import { initAdminUI } from './admin-ui.js';
 import { EXIT_HINT, closeLayer, initBackNav, openLayer, resetLayers } from './back-nav.js';
 import { clearLocalSession, getAccessToken, refreshAccessToken } from './supabase-client.js';
+import {
+  MAX_IMAGES_PER_MESSAGE,
+  MAX_PAYLOAD_CHARS,
+  buildImagePayload,
+  dataUrlToInline,
+  hasImages,
+  mimeLabel,
+  planDownscale,
+  selectImages,
+} from './chat-images.js';
 
 
 const HEALTH_REFRESH_MS = 60000;
@@ -56,6 +66,9 @@ const el = {
   statusDot: document.getElementById('statusDot'),
   messages: document.getElementById('messages'),
   composer: document.getElementById('composer'),
+  previews: document.getElementById('composerPreviews'),
+  attach: document.getElementById('composerAttach'),
+  file: document.getElementById('composerFile'),
   input: document.getElementById('input'),
   send: document.getElementById('send'),
   stopBtn: document.getElementById('stopBtn'),
@@ -482,6 +495,33 @@ function buildHero() {
   return hero;
 }
 
+/**
+ * Pictures attached to a user message, rendered inside its bubble.
+ * Only validated inline data URLs reach here (see chat-utils.normalizeImages),
+ * so `src` can never be arbitrary markup.
+ */
+function buildMessageImages(images) {
+  const wrap = document.createElement('div');
+  wrap.className = 'msg__images';
+  for (const image of images) {
+    const inline = dataUrlToInline(image?.dataUrl);
+    if (!inline) continue;
+    const figure = document.createElement('figure');
+    figure.className = 'msg__image';
+    const img = document.createElement('img');
+    img.src = image.dataUrl;
+    img.alt = image.name ? `Attached image: ${image.name}` : 'Attached image';
+    img.loading = 'lazy';
+    img.decoding = 'async';
+    figure.append(img);
+    const caption = document.createElement('figcaption');
+    caption.textContent = `${mimeLabel(inline.mimeType)} · ${image.name || 'image'}`;
+    figure.append(caption);
+    wrap.append(figure);
+  }
+  return wrap;
+}
+
 function buildMessageElement(message, index) {
   const fragment = el.template.content.cloneNode(true);
   const article = fragment.querySelector('.msg');
@@ -498,7 +538,12 @@ function buildMessageElement(message, index) {
   const body = document.createElement('div');
 
   if (isUser) {
-    body.textContent = message.content;
+    // Pictures first, then the question about them. An image-only message has no
+    // text at all, so the empty body is dropped rather than left as a blank line.
+    const images = Array.isArray(message.images) ? message.images : [];
+    if (images.length) content.append(buildMessageImages(images));
+    if (message.content) body.textContent = message.content;
+    else body.hidden = true;
   } else if (message.error) {
     body.textContent = message.content;
   } else {
@@ -873,8 +918,14 @@ async function streamChat(messages, { onDelta, onMeta, signal }) {
 
 function buildPayloadMessages(conversation) {
   return conversation.messages
-    .filter((m) => !m.error && m.content.trim())
-    .map((m) => ({ role: m.role, content: m.content }));
+    .filter((m) => !m.error && (m.content.trim() || hasImages(m)))
+    .map((m) => {
+      // Real bytes, never a filename: the server forwards these as inlineData.
+      const images = buildImagePayload(m.images);
+      return images.length
+        ? { role: m.role, content: m.content, images }
+        : { role: m.role, content: m.content };
+    });
 }
 
 /** Drop the typing indicator as soon as a reply settles (done or failed). */
@@ -902,11 +953,236 @@ function autoGrow() {
   el.input.style.height = `${Math.min(el.input.scrollHeight, 190)}px`;
 }
 
+/* -------------------------------------------------------------------------- */
+/* Image attachments (AI Assistant composer)                                   */
+/* -------------------------------------------------------------------------- */
+
+/** Images staged in the composer but not sent yet. Cleared on every send. */
+let pendingImages = [];
+
+function updateAttachState() {
+  if (!el.attach) return;
+  const full = pendingImages.length >= MAX_IMAGES_PER_MESSAGE;
+  el.attach.disabled = full;
+  el.attach.classList.toggle('is-full', full);
+  el.attach.title = full
+    ? `Up to ${MAX_IMAGES_PER_MESSAGE} images per message`
+    : 'Attach images (JPG, PNG, WEBP)';
+}
+
+/** Paint the staged previews; the strip is hidden when nothing is attached. */
+function renderImagePreviews() {
+  if (!el.previews) return;
+  el.previews.replaceChildren();
+  el.previews.hidden = pendingImages.length === 0;
+  if (pendingImages.length === 0) return;
+
+  pendingImages.forEach((image, index) => {
+    const card = document.createElement('div');
+    card.className = 'preview';
+    card.dataset.state = image.state;
+
+    const thumb = document.createElement('img');
+    thumb.className = 'preview__img';
+    thumb.src = image.dataUrl || image.previewUrl || '';
+    thumb.alt = image.name ? `Attached image ${image.name}` : 'Attached image';
+    card.append(thumb);
+
+    if (image.state !== 'ready') {
+      const state = document.createElement('span');
+      state.className = 'preview__state';
+      state.textContent = image.state === 'error' ? 'Failed' : 'Preparing…';
+      card.append(state);
+    }
+
+    const remove = document.createElement('button');
+    remove.type = 'button';
+    remove.className = 'preview__remove';
+    remove.setAttribute('aria-label', `Remove ${image.name || 'image'}`);
+    remove.textContent = '×';
+    remove.addEventListener('click', () => removeImage(index));
+    card.append(remove);
+
+    el.previews.append(card);
+  });
+}
+
+function removeImage(index) {
+  const [removed] = pendingImages.splice(index, 1);
+  if (removed?.previewUrl) URL.revokeObjectURL(removed.previewUrl);
+  renderImagePreviews();
+  updateAttachState();
+}
+
+function clearPendingImages() {
+  for (const image of pendingImages) {
+    if (image.previewUrl) URL.revokeObjectURL(image.previewUrl);
+  }
+  pendingImages = [];
+  renderImagePreviews();
+  updateAttachState();
+}
+
+function readAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ''));
+    reader.onerror = () => reject(new Error('unreadable'));
+    reader.readAsDataURL(file);
+  });
+}
+
+/**
+ * Downscale + re-encode so a 12 MP phone photo still fits the payload cap.
+ * Falls back to the raw data URL when the browser cannot decode bitmaps.
+ */
+async function shrinkImage(file, mimeType) {
+  if (typeof createImageBitmap !== 'function') return readAsDataUrl(file);
+  const bitmap = await createImageBitmap(file);
+  try {
+    const plan = planDownscale(bitmap.width, bitmap.height);
+    const canvas = document.createElement('canvas');
+    canvas.width = plan.width;
+    canvas.height = plan.height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return readAsDataUrl(file);
+    ctx.drawImage(bitmap, 0, 0, plan.width, plan.height);
+
+    // PNG keeps crisp screenshots/text; photos re-encode smaller as JPEG.
+    let dataUrl = canvas.toDataURL(mimeType === 'image/png' ? 'image/png' : 'image/jpeg', 0.9);
+    if (dataUrl.length > MAX_PAYLOAD_CHARS) {
+      dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+    }
+    if (dataUrl.length > MAX_PAYLOAD_CHARS) throw new Error('too_large');
+    return dataUrl;
+  } finally {
+    bitmap.close?.();
+  }
+}
+
+/** Validate, stage and prepare picked/dropped/pasted files. */
+async function addImageFiles(fileList) {
+  const { accepted, errors } = selectImages(fileList, pendingImages.length);
+
+  if (errors.length) {
+    showNotice({
+      tone: 'error',
+      text: errors[0],
+      hint: errors.length > 1 ? `${errors.length - 1} more file(s) were skipped.` : '',
+    });
+  }
+  if (accepted.length === 0) return;
+  if (!errors.length) hideNotice();
+
+  const staged = accepted.map(({ file, mimeType }) => {
+    const entry = {
+      name: file.name || 'pasted-image',
+      mimeType,
+      state: 'loading',
+      previewUrl: URL.createObjectURL(file),
+      dataUrl: '',
+    };
+    pendingImages.push(entry);
+    return { file, mimeType, entry };
+  });
+  renderImagePreviews();
+  updateAttachState();
+
+  for (const { file, mimeType, entry } of staged) {
+    try {
+      entry.dataUrl = await shrinkImage(file, mimeType);
+      entry.mimeType = dataUrlToInline(entry.dataUrl)?.mimeType ?? mimeType;
+      entry.state = 'ready';
+    } catch {
+      entry.state = 'error';
+    }
+    renderImagePreviews();
+  }
+
+  if (pendingImages.some((image) => image.state === 'error')) {
+    showNotice({
+      tone: 'error',
+      text: 'One image could not be prepared.',
+      hint: 'Try a JPG, PNG or WEBP file under 8 MB.',
+    });
+  }
+}
+
+/** Ctrl+V / ⌘V: paste a screenshot straight into the composer. */
+function handlePaste(event) {
+  const items = event.clipboardData?.items;
+  if (!items) return;
+  const files = [];
+  for (const item of items) {
+    if (item.kind === 'file' && String(item.type).startsWith('image/')) {
+      const file = item.getAsFile();
+      if (file) files.push(file);
+    }
+  }
+  if (files.length) {
+    event.preventDefault();
+    addImageFiles(files);
+  }
+}
+
+/** Drag-and-drop onto the composer. */
+function wireDropZone() {
+  const zone = el.composer?.closest('.composer-wrap') ?? el.composer;
+  if (!zone) return;
+
+  const carriesFiles = (event) => Array.from(event.dataTransfer?.types ?? []).includes('Files');
+
+  zone.addEventListener('dragover', (event) => {
+    if (!carriesFiles(event)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy';
+    zone.classList.add('is-dropping');
+  });
+
+  zone.addEventListener('dragleave', (event) => {
+    if (event.relatedTarget && zone.contains(event.relatedTarget)) return;
+    zone.classList.remove('is-dropping');
+  });
+
+  zone.addEventListener('drop', (event) => {
+    if (!carriesFiles(event)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    zone.classList.remove('is-dropping');
+    const files = event.dataTransfer?.files;
+    if (files?.length) addImageFiles(files);
+  });
+
+  // Dropping outside the composer must not navigate away from the app.
+  for (const type of ['dragover', 'drop']) {
+    document.addEventListener(type, (event) => {
+      if (carriesFiles(event)) event.preventDefault();
+    });
+  }
+}
+
+function wireImageInput() {
+  if (!el.attach || !el.file) return;
+  el.attach.addEventListener('click', () => el.file.click());
+  el.file.addEventListener('change', () => {
+    if (el.file.files?.length) addImageFiles(el.file.files);
+    el.file.value = ''; // picking the same file twice must still work
+  });
+  el.input.addEventListener('paste', handlePaste);
+  wireDropZone();
+  updateAttachState();
+}
+
 async function submit() {
   if (state.streaming) return;
 
   const text = el.input.value.trim();
-  if (!text) return;
+  // Only images that finished downscaling are sendable.
+  const images = pendingImages
+    .filter((image) => image.state === 'ready' && image.dataUrl)
+    .map((image) => ({ name: image.name, mimeType: image.mimeType, dataUrl: image.dataUrl }));
+  if (!text && images.length === 0) return;
 
   const limit = state.health?.limits?.maxInputChars ?? 24000;
   if (text.length > limit) {
@@ -923,11 +1199,16 @@ async function submit() {
   let conversation = activeConversation();
   if (!conversation) conversation = createConversation();
 
-  conversation.messages.push({ role: 'user', content: text });
-  if (conversation.title === 'New chat') conversation.title = titleFrom(text);
+  conversation.messages.push(
+    images.length ? { role: 'user', content: text, images } : { role: 'user', content: text },
+  );
+  if (conversation.title === 'New chat') {
+    conversation.title = titleFrom(text || `Image: ${images[0].name}`);
+  }
   conversation.updatedAt = Date.now();
 
   el.input.value = '';
+  clearPendingImages();
   autoGrow();
   renderHistory();
   renderMessages({ animateLastIndex: conversation.messages.length - 1 });
@@ -1425,6 +1706,7 @@ if (!state.activeId && state.conversations.length > 0) {
 renderHistory();
 renderMessages();
 autoGrow();
+wireImageInput();
 
 /* Android / browser Back: menus, dialogs and an open conversation each own one
    history entry, so Back closes them first. At the root it asks for
