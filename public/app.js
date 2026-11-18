@@ -236,7 +236,7 @@ function loadKatex() {
 function paintMath(container, math) {
   if (!math || math.length === 0) return;
   const pattern = mathTokenPattern();
-  const walker = document.createTreeWalker(container, Node.SHOW_TEXT);
+  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
   const targets = [];
   while (walker.nextNode()) {
     const node = walker.currentNode;
@@ -250,7 +250,7 @@ function paintMath(container, math) {
     wrap.className = display ? 'math math--block' : 'math math--inline';
     wrap.dataset.tex = tex;
 
-    const lib = katexCache;
+    const lib = katexLib;
     let rendered = false;
     if (lib) {
       try {
@@ -321,7 +321,7 @@ function decorateLongAnswer(container) {
   btn.className = 'rich__expand';
   btn.textContent = 'Show full answer';
   btn.addEventListener('click', () => {
-    const expanded = container.classList.togge('rich--expanded');
+    const expanded = container.classList.toggle('rich--expanded');
     btn.textContent = expanded ? 'Show less' : 'Show full answer';
   });
   container.append(btn);
@@ -334,18 +334,18 @@ function renderRich(element, markdown) {
   decorateCodeBlocks(element);
   decorateLongAnswer(element);
   if (math.length) {
-    if (katexCache) {
+    if (katexLib) {
       paintMath(element, math);
     } else {
       loadKatex().then((lib) => {
-        katexCache = lib;
+        katexLib = lib;
         paintMath(element, math);
       });
     }
   }
 }
 
-let katexCache = null;
+let katexLib = null;
 
 async function copyText(text) {
   try {
