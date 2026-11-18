@@ -680,3 +680,220 @@ export async function sendMessage(conversationId, body) {
 export function clearLocalSession() {
   writeSession(null);
 }
+
+/* ------------------------------ LOKY CONNECT ------------------------------ */
+/* Thin wrappers over the RPCs created by 0002 (friends) and 0003 (connect).
+   Every call runs as the signed-in user, so RLS decides what is visible; the
+   client never receives a service-role key. */
+
+export async function friends() {
+  return callRpc('my_friends');
+}
+
+export async function friendRequests() {
+  return callRpc('my_friend_requests');
+}
+
+export async function sendFriendRequest(otherUserId, note = null) {
+  return callRpc('send_friend_request', { other_user: otherUserId, note });
+}
+
+export async function respondFriendRequest(requestId, decision) {
+  return callRpc('respond_friend_request', { request_id: requestId, decision });
+}
+
+export async function cancelFriendRequest(requestId) {
+  return callRpc('cancel_friend_request', { request_id: requestId });
+}
+
+export async function friendStatus(otherUserId) {
+  return callRpc('friend_status', { other_user: otherUserId });
+}
+
+export async function touchLastSeen() {
+  return callRpc('touch_last_seen');
+}
+
+export async function connectThreads() {
+  return callRpc('connect_threads');
+}
+
+export async function connectMessages(conversationId, limit = 60) {
+  return callRpc('connect_messages', { conv: conversationId, max_rows: limit });
+}
+
+export async function connectSend(conversationId, payload = {}) {
+  return callRpc('connect_send_message', {
+    conv: conversationId,
+    body: payload.body || '',
+    media_path: payload.media_path || null,
+    media_type: payload.media_type || null,
+    reply_to: payload.reply_to || null,
+  });
+}
+
+export async function connectMarkRead(conversationId) {
+  return callRpc('connect_mark_read', { conv: conversationId });
+}
+
+export async function connectReact(messageId, emoji) {
+  return callRpc('connect_react', { message_id: messageId, emoji });
+}
+
+export async function connectUnreact(messageId, emoji) {
+  return callRpc('connect_unreact', { message_id: messageId, emoji });
+}
+
+export async function connectDeleteMessage(messageId) {
+  return callRpc('connect_delete_message', { message_id: messageId });
+}
+
+export async function connectSetTyping(conversationId) {
+  return callRpc('connect_set_typing', { conv: conversationId });
+}
+
+export async function connectTypingStatus(conversationId) {
+  return callRpc('connect_typing_status', { conv: conversationId });
+}
+
+export async function connectSetProfile(fields = {}) {
+  return callRpc('connect_set_profile', {
+    display_name: fields.display_name ?? null,
+    bio: fields.bio ?? null,
+    avatar_url: fields.avatar_url ?? null,
+    privacy_last_seen: fields.privacy_last_seen ?? null,
+    privacy_discoverable: fields.privacy_discoverable ?? null,
+  });
+}
+
+export async function connectNotifications(maxRows = 30) {
+  return callRpc('connect_notifications', { max_rows: maxRows });
+}
+
+export async function connectMarkNotificationsRead() {
+  return callRpc('connect_mark_notifications_read');
+}
+
+/** Fetch a storage object path and return a short-lived signed URL. */
+async function storageFetch(url, options = {}, timeoutMs = 20000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } catch (error) {
+    const reason = error && error.name === 'AbortError' ? 'timed out' : 'could not be reached';
+    throw new SupabaseError('network', `Media storage ${reason}.`, 0);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function objectExtension(file) {
+  const name = typeof file?.name === 'string' ? file.name : '';
+  const raw = name.includes('.') ? name.split('.').pop() : '';
+  const clean = String(raw).toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 5);
+  return clean || (file?.type === 'video/mp4' ? 'mp4' : 'jpg');
+}
+
+function newObjectName() {
+  const c = globalThis.crypto;
+  if (c && typeof c.randomUUID === 'function') return c.randomUUID();
+  return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;
+}
+
+/**
+ * Upload an image/video to the private `connect-media` bucket.
+ *
+ * With a conversation id the object lives at `<conversation>/<uuid>.<ext>` and
+ * the storage policy checks membership. Without one it lives at
+ * `avatars/<user id>/<uuid>.<ext>`, which only that user may write.
+ *
+ * Returns the object path (not a URL): reads go through signed URLs.
+ */
+export async function uploadConnectMedia(file, conversationId = null) {
+  if (!file) throw new SupabaseError('upload', 'No file was selected.', 400);
+  const user = currentUser();
+  if (!user || !user.id) {
+    throw new SupabaseError('auth', 'Sign in to upload media.', 401);
+  }
+
+  const config = await loadConfig();
+  const token = await getAccessToken();
+  if (!token) throw new SupabaseError('auth', 'Sign in to upload media.', 401);
+
+  const folder = conversationId ? String(conversationId) : `avatars/${user.id}`;
+  const objectPath = `${folder}/${newObjectName()}.${objectExtension(file)}`;
+
+  const response = await storageFetch(
+    `${config.url}/storage/v1/object/connect-media/${objectPath}`,
+    {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${token}`,
+        apikey: config.anonKey,
+        'content-type': file.type || 'application/octet-stream',
+        'x-upsert': 'false',
+      },
+      body: file,
+    }
+  );
+
+  if (!response.ok) {
+    let detail = '';
+    try {
+      const payload = await response.json();
+      detail = payload?.message || payload?.error || '';
+    } catch {
+      detail = '';
+    }
+    if (response.status === 413) {
+      throw new SupabaseError('upload', 'That file is larger than the upload limit.', 413);
+    }
+    if (response.status === 403 || response.status === 401) {
+      throw new SupabaseError('upload', 'You are not allowed to upload to this conversation.', response.status);
+    }
+    throw new SupabaseError(
+      'upload',
+      detail ? `Upload failed: ${detail}` : 'The file could not be uploaded.',
+      response.status
+    );
+  }
+
+  return objectPath;
+}
+
+/** Sign a private object path for display (one hour). */
+export async function signedConnectMediaUrl(objectPath) {
+  if (!objectPath) return null;
+  if (/^https?:\/\//i.test(objectPath)) return objectPath;
+
+  const config = await loadConfig();
+  const token = await getAccessToken();
+  if (!token) return null;
+
+  const clean = String(objectPath).replace(/^\/+/, '');
+  const response = await storageFetch(
+    `${config.url}/storage/v1/object/sign/connect-media/${clean}`,
+    {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${token}`,
+        apikey: config.anonKey,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ expiresIn: 3600 }),
+    }
+  );
+
+  if (!response.ok) return null;
+  let data = null;
+  try {
+    data = await response.json();
+  } catch {
+    return null;
+  }
+  const signed = data?.signedURL || data?.signedUrl;
+  if (!signed) return null;
+  if (/^https?:\/\//i.test(signed)) return signed;
+  return `${config.url}/storage/v1${signed}`;
+}
