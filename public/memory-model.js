@@ -280,22 +280,33 @@ export function buildMemoryBlock(memories, { maxChars = MAX_CONTEXT_CHARS } = {}
   const list = (memories ?? []).filter((m) => m && normaliseContent(m.content));
   if (list.length === 0) return '';
 
+  const header = 'Saved notes about this user (from their LOKY Memory page):';
+  const footer =
+    'Use these only where they genuinely help the current question. Do not mention the notes themselves, do not assume anything beyond them, and never invent a memory.';
+
+  // The fixed framing counts against the same budget as the notes themselves,
+  // otherwise a long list overshoots the caller's limit.
+  const budget = maxChars - header.length - footer.length - 2;
+  if (budget < 32) return '';
+
   const lines = [];
   let used = 0;
   for (const memory of list) {
     const label = CATEGORY_META[normaliseCategory(memory.category)]?.label ?? 'Personal';
-    const line = `- [${label}] ${normaliseContent(memory.content)}`;
-    if (used + line.length + 1 > maxChars) break;
+    const remaining = budget - used;
+    if (remaining < 24) break;
+
+    let line = `- [${label}] ${normaliseContent(memory.content)}`;
+    if (line.length + 1 > remaining) {
+      // Trim rather than drop: one truncated note is still useful context.
+      line = `${line.slice(0, Math.max(0, remaining - 2)).trimEnd()}\u2026`;
+    }
     lines.push(line);
     used += line.length + 1;
   }
   if (lines.length === 0) return '';
 
-  return [
-    'Saved notes about this user (from their LOKY Memory page):',
-    ...lines,
-    'Use these only where they genuinely help the current question. Do not mention the notes themselves, do not assume anything beyond them, and never invent a memory.',
-  ].join('\n');
+  return [header, ...lines, footer].join('\n');
 }
 
 /* -------------------------------------------------------------------------- */

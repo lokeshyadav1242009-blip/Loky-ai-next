@@ -230,7 +230,16 @@ test('the Messages feature stays local: no network calls or new endpoints', () =
 
 test('the Messages feature introduces no new dependencies', () => {
   const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
-  assert.deepEqual(Object.keys(pkg.dependencies).sort(), ['dompurify', 'dotenv', 'express', 'marked']);
+  // katex is vendored into public/vendor/katex for the rich answer renderer and
+  // is never imported by the Messages code. The list stays explicit so any
+  // other new dependency still fails this guard.
+  assert.deepEqual(Object.keys(pkg.dependencies).sort(), [
+    'dompurify',
+    'dotenv',
+    'express',
+    'katex',
+    'marked',
+  ]);
 });
 
 test('the Messages styles are present and mobile-first', () => {
