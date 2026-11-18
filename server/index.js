@@ -13,8 +13,7 @@ import { requireAuth } from './auth.js';
 import { isMaintenanceOn, maintenanceSnapshot } from './maintenance.js';
 import { parseSuperAdminIds, SUPER_ADMIN_ENV } from './superadmin.js';
 import { isAssetPath } from './asset-path.js';
-import { createMemoryRouter } from './memory-routes.js';
-import { bearerToken } from './memory-routes.js';
+import { createMemoryRouter, bearerToken } from './memory-routes.js';
 import { memoryBlockForRequest } from './memory.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -190,7 +189,22 @@ app.post('/api/chat', rateLimitMiddleware(limiter), requireAuth, async (req, res
     return sendError(res, error);
   }
 
-  // 3. Open the SSE stream and pipe tokens through.
+  // 3. LOKY MEMORY: attach only the notes that match this question. Memory is a
+  //    bonus, never a dependency - any failure simply answers without it.
+  let systemExtra = '';
+  try {
+    const lastUser = [...messages].reverse().find((m) => m.role === 'user');
+    const question = typeof lastUser?.content === 'string' ? lastUser.content : '';
+    systemExtra = await memoryBlockForRequest({
+      config,
+      token: bearerToken(req),
+      question,
+    });
+  } catch {
+    systemExtra = '';
+  }
+
+  // 4. Open the SSE stream and pipe tokens through.
   res.writeHead(200, {
     'Content-Type': 'text/event-stream; charset=utf-8',
     'Cache-Control': 'no-cache, no-transform',
@@ -225,6 +239,7 @@ app.post('/api/chat', rateLimitMiddleware(limiter), requireAuth, async (req, res
   try {
     for await (const delta of streamChat(config, messages, {
       signal: abortController.signal,
+      systemExtra,
     })) {
       send({ type: 'delta', text: delta });
     }
