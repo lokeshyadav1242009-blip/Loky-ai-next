@@ -226,7 +226,7 @@ export async function* streamChat(config, messages, options = {}) {
     response = await fetch(endpoint, {
       method: 'POST',
       headers: buildHeaders(config),
-      body: JSON.stringify(buildPayload(config, messages)),
+      body: JSON.stringify(buildPayload(config, messages, options)),
       signal: controller.signal,
       redirect: 'follow',
     });
