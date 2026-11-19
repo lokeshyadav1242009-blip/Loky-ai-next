@@ -673,3 +673,159 @@
     transition: none;
   }
 }
+
+/* ============================ auth gate (signup) ============================ */
+/* Large, comfortable fields and the emerald accent already used across LOKY AI.
+   16px font stops mobile Safari/Chrome from zooming into the field on focus. */
+.authgate__field {
+  position: relative;
+  display: block;
+}
+
+.authgate__input {
+  min-height: 52px;
+  font-size: 16px;
+}
+
+.authgate__input--password {
+  padding-right: 78px;
+}
+
+.authgate__toggle {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  transform: translateY(-50%);
+  min-width: 58px;
+  height: 38px;
+  padding: 0 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(25, 230, 140, 0.28);
+  background: rgba(16, 185, 129, 0.1);
+  color: #34d399;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.authgate__toggle:focus-visible {
+  outline: 2px solid #19e68c;
+  outline-offset: 2px;
+}
+
+/* Live password requirements: neutral until met, emerald tick once satisfied. */
+.authgate__req {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.authgate__reqitem {
+  position: relative;
+  padding-left: 22px;
+  font-size: 0.82rem;
+  line-height: 1.35;
+  color: rgba(226, 240, 233, 0.62);
+}
+
+.authgate__reqitem::before {
+  content: '•';
+  position: absolute;
+  left: 6px;
+  color: rgba(226, 240, 233, 0.4);
+}
+
+.authgate__reqitem[data-met='yes'] {
+  color: #34d399;
+}
+
+.authgate__reqitem[data-met='yes']::before {
+  content: '✓';
+  color: #19e68c;
+}
+
+/* Optional OAuth block. Hidden by default: it is revealed only when the
+   Supabase project reports the provider as enabled. */
+.authgate__oauth {
+  display: grid;
+  gap: 14px;
+  margin: 4px 0 18px;
+}
+
+.authgate__oauthbtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 52px;
+  padding: 0 18px;
+  border-radius: 14px;
+  border: 1px solid rgba(25, 230, 140, 0.3);
+  background: rgba(10, 24, 19, 0.9);
+  color: #eaf6f0;
+  font: inherit;
+  font-size: 0.98rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.16s ease, border-color 0.16s ease, background 0.16s ease;
+}
+
+.authgate__oauthbtn:hover:not(:disabled) {
+  border-color: rgba(25, 230, 140, 0.6);
+  background: rgba(16, 185, 129, 0.14);
+}
+
+.authgate__oauthbtn:active:not(:disabled) {
+  transform: scale(0.985);
+}
+
+.authgate__oauthbtn:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.authgate__oauthbtn[aria-busy='true'] .authgate__oauthlabel::after {
+  content: '…';
+}
+
+.authgate__oauthicon {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: rgba(25, 230, 140, 0.16);
+  color: #34d399;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.authgate__divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0;
+  color: rgba(226, 240, 233, 0.45);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.authgate__divider::before,
+.authgate__divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(25, 230, 140, 0.22), transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .authgate__oauthbtn,
+  .authgate__toggle {
+    transition: none;
+  }
+}

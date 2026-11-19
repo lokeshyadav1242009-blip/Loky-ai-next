@@ -257,7 +257,7 @@ async function submitSignIn(event) {
   const passwordCheck = validatePassword(password);
   if (!passwordCheck.ok) return setError(passwordCheck.error || 'Enter your password.');
 
-  setBusy(true);
+  setBusy(true, 'signin');
   setError('');
 
   try {
@@ -505,21 +505,19 @@ export function initAuthGate(nextHooks = {}) {
       signOutNow().catch(() => {});
     });
 
-    // Live username feedback uses the same rules the database enforces.
-    el.usernameNew?.addEventListener('input', () => {
-      const value = el.usernameNew.value.trim();
-      if (!el.signupHelp) return;
-      if (!value) {
-        el.signupHelp.textContent = '3–20 letters, numbers or _ — this is how people find you.';
-        el.signupHelp.dataset.kind = '';
-        return;
-      }
-      const check = validateUsername(value);
-      el.signupHelp.textContent = check.ok
-        ? `You will be reachable as ${displayUsername(check.value)}`
-        : check.error;
-      el.signupHelp.dataset.kind = check.ok ? 'ok' : 'error';
-    });
+    // Password visibility, plus the live checklist on the signup screen.
+    wirePasswordToggle(el.password, el.passwordToggle);
+    wirePasswordToggle(el.passwordNew, el.passwordNewToggle);
+    el.passwordNew?.addEventListener('input', () =>
+      renderPasswordRequirements(el.passwordNew, el.passwordReq)
+    );
+    renderPasswordRequirements(el.passwordNew, el.passwordReq);
+
+    // Optional Google sign-in: both buttons share one handler, and the blocks
+    // stay hidden unless the project reports the provider as enabled.
+    el.googleBtn?.addEventListener('click', startGoogle);
+    el.googleBtnSignIn?.addEventListener('click', startGoogle);
+    applyOAuthAvailability().catch(() => {});
 
     el.usernameInput?.addEventListener('input', () => {
       if (!el.usernameHelp) return;
