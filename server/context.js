@@ -40,6 +40,13 @@ export const MIN_RECENT_MESSAGES = 8;
 /** Hard cap on a stored summary, in characters (~1200 tokens). */
 export const SUMMARY_MAX_CHARS = 4800;
 
+/**
+ * Default token budget for the conversation window sent to the model.
+ * Chosen to leave generous headroom under Gemini's large context windows while
+ * keeping first-token latency and cost predictable.
+ */
+export const DEFAULT_CONTEXT_TOKENS = 24000;
+
 /** Estimate the token cost of a string. */
 export function estimateTokens(text) {
   const value = typeof text === 'string' ? text : '';
