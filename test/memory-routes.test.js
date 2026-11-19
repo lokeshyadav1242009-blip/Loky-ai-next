@@ -31,6 +31,11 @@ const CONTENT = 'I am preparing for JEE Advanced 2026';
 const CATEGORY = model.MEMORY_CATEGORIES?.[0] ?? 'study';
 
 function jsonResponse(body, status = 200) {
+  // 204 must not carry a body: undici throws on a null-body status, which would
+  // surface as a fake "storage unreachable" error instead of the real result.
+  if (body === null || body === undefined || status === 204) {
+    return new Response(null, { status });
+  }
   return new Response(JSON.stringify(body), {
     status,
     headers: { 'content-type': 'application/json' },
