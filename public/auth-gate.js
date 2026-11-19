@@ -25,14 +25,24 @@
 
 import {
   SupabaseError,
+  ensureProfile,
   getMyProfile,
   isSignedIn,
+  loadAuthSettings,
   saveUsername,
   signIn as apiSignIn,
   signOut as apiSignOut,
   signUp as apiSignUp,
+  startOAuth,
 } from './supabase-client.js';
-import { validateEmail, validatePassword, validateSignupForm } from './auth-utils.js';
+import {
+  isProviderEnabled,
+  passwordChecks,
+  validateEmail,
+  validatePassword,
+  validateSignupCredentials,
+  validateSignupForm,
+} from './auth-utils.js';
 import { displayUsername, validateUsername } from './username-utils.js';
 import { describeError, refreshAccount } from './direct-messages.js';
 
@@ -91,10 +101,29 @@ function setNotice(message) {
   el.notice.hidden = !message;
 }
 
-function setBusy(busy) {
+/* Button labels while a request is in flight: the pressed button says what it
+ * is doing, so a slow network never looks like a dead tap. */
+const BUSY_LABELS = {
+  signin: { idle: 'Sign in', busy: 'Signing in…' },
+  signup: { idle: 'Create account', busy: 'Creating your account…' },
+  username: { idle: 'Save username', busy: 'Saving…' },
+};
+
+function setBusy(busy, active = '') {
   state.busy = Boolean(busy);
-  for (const button of [el.signInBtn, el.signUpBtn, el.usernameSave]) {
-    if (button) button.disabled = state.busy;
+  const buttons = { signin: el.signInBtn, signup: el.signUpBtn, username: el.usernameSave };
+  for (const [key, button] of Object.entries(buttons)) {
+    if (!button) continue;
+    button.disabled = state.busy;
+    const label = BUSY_LABELS[key];
+    if (!label) continue;
+    button.textContent = state.busy && key === active ? label.busy : label.idle;
+  }
+  // OAuth buttons keep their icon, so only the disabled state changes.
+  for (const button of [el.googleBtn, el.googleBtnSignIn]) {
+    if (!button) continue;
+    button.disabled = state.busy;
+    button.setAttribute('aria-busy', state.busy && active === 'google' ? 'true' : 'false');
   }
   if (el.gate) el.gate.dataset.busy = state.busy ? 'yes' : 'no';
 }
@@ -121,7 +150,7 @@ function setScreen(screen) {
   if (screen === 'signin' || screen === 'signup') setNotice('');
 
   if (screen === 'signin') focusIfDesktop(el.email);
-  if (screen === 'signup') focusIfDesktop(el.displayName);
+  if (screen === 'signup') focusIfDesktop(el.emailNew);
   if (screen === 'username') focusIfDesktop(el.usernameInput);
 
   // Leaving Create Account (by Back or by tapping "Sign in") drops its entry,
@@ -181,8 +210,18 @@ export async function checkSession({ silent = false } = {}) {
         unlock();
         return 'app';
       }
-      lock('username');
-      return 'username';
+      // No username yet: either a brand-new account or a confirmation link that
+      // carried no stored intent. Create the default profile automatically so
+      // signup lands straight in the chat; the manual step stays as a fallback
+      // for accounts where the automatic attempt cannot complete.
+      try {
+        await ensureProfile();
+        unlock();
+        return 'app';
+      } catch {
+        lock('username');
+        return 'username';
+      }
     } catch (error) {
       const code = error instanceof SupabaseError ? error.code : '';
       if (code === 'signed_out' || code === 'email_unconfirmed') {
@@ -245,45 +284,42 @@ async function submitSignUp(event) {
   event?.preventDefault();
   if (state.busy) return;
 
-  const displayName = (el.displayName?.value || '').trim();
-  const username = (el.usernameNew?.value || '').trim();
   const email = (el.emailNew?.value || '').trim();
   const password = el.passwordNew?.value || '';
 
-  const form = validateSignupForm({ displayName, username, email, password });
-  if (form && form.ok === false) {
-    return setError(form.error || 'Please check the details above.');
+  const form = validateSignupCredentials({ email, password });
+  if (!form.ok) {
+    return setError(form.errors.email || form.errors.password || 'Please check the details above.');
   }
 
-  const values = (form && form.value) || {};
-  const finalUsername = values.username || username;
-  const finalDisplayName = values.displayName ?? displayName;
-
-  const usernameCheck = validateUsername(finalUsername);
-  if (!usernameCheck.ok) return setError(usernameCheck.error || 'Pick a valid username.');
-
-  setBusy(true);
+  setBusy(true, 'signup');
   setError('');
   setNotice('');
 
   try {
-    const result = await apiSignUp(email, password);
+    const result = await apiSignUp(form.value.email, form.value.password);
 
+    // Email confirmation is never bypassed: without a session Supabase created
+    // an unconfirmed account, so the user is sent to sign in with the link.
     if (result?.needsEmailConfirmation) {
       setScreen('signin');
       setNotice(
-        `Account created. Open the confirmation link we sent to ${email}, then sign in here.`
+        `Account created. Open the confirmation link we sent to ${form.value.email}, then sign in here.`
       );
+      if (el.email) el.email.value = form.value.email;
       return;
     }
 
-    // Signed in straight away: store the chosen username now so onboarding never
-    // asks for it a second time.
+    if (el.passwordNew) el.passwordNew.value = '';
+    renderPasswordRequirements(el.passwordNew, el.passwordReq);
+
+    // Signed in immediately: give the new account a real, unique profile so the
+    // app opens in the chat instead of an onboarding form. A profile problem
+    // must not hide the app, so the one-time username step stays available.
     try {
-      await saveUsername(usernameCheck.value || finalUsername, finalDisplayName);
-    } catch (error) {
-      // The account exists; the username can be finished on the gate's own step.
-      if (el.usernameInput) el.usernameInput.value = usernameCheck.value || finalUsername;
+      await ensureProfile();
+    } catch {
+      setNotice('Signed in. We could not finish your profile — you can set a username from your profile.');
     }
 
     await checkSession({ silent: true });
@@ -291,6 +327,67 @@ async function submitSignUp(event) {
     setError(describeError(error));
   } finally {
     setBusy(false);
+  }
+}
+
+/** Show or hide a password field without moving focus out of the input. */
+function wirePasswordToggle(input, toggle) {
+  if (!input || !toggle) return;
+  toggle.addEventListener('click', () => {
+    const show = input.type === 'password';
+    input.type = show ? 'text' : 'password';
+    toggle.setAttribute('aria-pressed', show ? 'true' : 'false');
+    toggle.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
+    toggle.textContent = show ? 'Hide' : 'Show';
+  });
+}
+
+/** Render the live password checklist next to the signup password field. */
+function renderPasswordRequirements(input, list) {
+  if (!list) return;
+  list.replaceChildren();
+  for (const check of passwordChecks(input?.value || '')) {
+    const item = document.createElement('li');
+    item.className = 'authgate__reqitem';
+    item.dataset.met = check.met ? 'yes' : 'no';
+    item.textContent = check.label;
+    list.appendChild(item);
+  }
+}
+
+/**
+ * Start Google sign-in. The redirect returns to this origin with the session in
+ * the URL fragment, which the existing confirmation handler already consumes.
+ */
+async function startGoogle() {
+  if (state.busy) return;
+  setError('');
+  setNotice('');
+  setBusy(true, 'google');
+  try {
+    await startOAuth('google');
+  } catch (error) {
+    setBusy(false);
+    setError(describeError(error));
+  }
+}
+
+/**
+ * Reveal the Google buttons only when the Supabase project really has the
+ * provider enabled. Supabase's public /auth/v1/settings lists enabled
+ * providers, so a project without Google credentials shows nothing rather than
+ * a button that dead-ends.
+ */
+async function applyOAuthAvailability() {
+  let enabled = false;
+  try {
+    enabled = isProviderEnabled(await loadAuthSettings(), 'google');
+  } catch {
+    enabled = false;
+  }
+  state.oauthEnabled = enabled;
+  for (const node of [el.oauthSignIn, el.oauthSignUp]) {
+    if (node) node.hidden = !enabled;
   }
 }
 
@@ -368,13 +465,18 @@ export function initAuthGate(nextHooks = {}) {
   el.signInBtn = document.getElementById('authSignInBtn');
   el.goSignUp = document.getElementById('authGoSignUp');
 
-  el.displayName = document.getElementById('authDisplayName');
-  el.usernameNew = document.getElementById('authUsernameNew');
   el.emailNew = document.getElementById('authEmailNew');
   el.passwordNew = document.getElementById('authPasswordNew');
+  el.passwordNewToggle = document.getElementById('authPasswordNewToggle');
+  el.passwordReq = document.getElementById('authPasswordNewReq');
   el.signUpBtn = document.getElementById('authSignUpBtn');
   el.goSignIn = document.getElementById('authGoSignIn');
-  el.signupHelp = document.getElementById('authSignupHelp');
+
+  el.passwordToggle = document.getElementById('authPasswordToggle');
+  el.oauthSignIn = document.getElementById('authOauth');
+  el.oauthSignUp = document.getElementById('authOauthSignup');
+  el.googleBtn = document.getElementById('authGoogleBtn');
+  el.googleBtnSignIn = document.getElementById('authGoogleBtnSignIn');
 
   el.usernameInput = document.getElementById('authUsernameInput');
   el.usernameHelp = document.getElementById('authUsernameHelp');
