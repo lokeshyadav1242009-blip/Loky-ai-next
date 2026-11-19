@@ -1,7 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { formatHistoryDate, historyBlock, normalizeHistoryInput } from '../server/history.js';
+import {
+  HISTORY_LIMITS,
+  formatHistoryDate,
+  historyBlock,
+  normalizeHistoryInput,
+} from '../server/history.js';
 
 const NOW = Date.UTC(2026, 10, 20, 12, 0, 0);
 
@@ -127,5 +132,6 @@ test('historyBlock never exceeds the configured size budget', () => {
   );
 
   assert.ok(block.length > 0);
-  assert.ok(block.length <= 8001, `block too large: ${block.length}`);
+  // Truncated to the configured budget rather than an arbitrary number.
+  assert.ok(block.length <= HISTORY_LIMITS.blockChars, `block too large: ${block.length}`);
 });
