@@ -90,11 +90,22 @@
 /* Rich content: long answers                                                */
 /* -------------------------------------------------------------------------- */
 
+/* Collapsed preview. The clip lives on the answer body ONLY; the toggle is a
+   sibling of this element, so `overflow: hidden` can never hide it. */
 .rich--long:not(.rich--expanded) {
   max-height: 430px;
   overflow: hidden;
   position: relative;
-  mask-image: linear-gradient(to bottom, #000 68%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to bottom, #000 88%, rgba(0, 0, 0, 0.25) 100%);
+  mask-image: linear-gradient(to bottom, #000 88%, rgba(0, 0, 0, 0.25) 100%);
+}
+
+/* Expanded: the whole answer, with nothing clipping or fading it. */
+.rich--expanded {
+  max-height: none;
+  overflow: visible;
+  -webkit-mask-image: none;
+  mask-image: none;
 }
 
 .rich__expand {
@@ -114,6 +125,12 @@
 
 .rich__expand:hover {
   background: rgba(25, 230, 140, 0.13);
+}
+
+.rich__expand[aria-expanded="true"] {
+  color: var(--text-dim, #9fb3aa);
+  background: rgba(25, 230, 140, 0.04);
+  border-color: rgba(25, 230, 140, 0.14);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -655,7 +672,7 @@
   }
 
   .rich--long:not(.rich--expanded) {
-    max-height: 340px;
+    max-height: 360px;
   }
 }
 

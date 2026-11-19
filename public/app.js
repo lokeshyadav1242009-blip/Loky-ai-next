@@ -43,6 +43,7 @@ import {
   selectImages,
 } from './chat-images.js';
 import { extractMath, isLongAnswer, mathTokenPattern } from './rich-text.js';
+import { answerKey, decorateDecision, expandLabel } from './long-answer.js';
 import {
   CONTINUED_NOTICE,
   DEFAULT_CONTEXT_BUDGET,
@@ -320,29 +321,61 @@ function paintMath(container, math) {
   }
 }
 
+/** Answers the reader has expanded, keyed by content so a re-render keeps them open. */
+const expandedAnswers = new Set();
+
 /** Collapse very long answers behind an explicit expand control. */
-function decorateLongAnswer(container) {
-  const text = container.textContent || '';
-  if (!isLongAnswer(text)) return;
+function decorateLongAnswer(container, key) {
+  const host = container.parentElement ?? container;
+
+  // Drop a toggle left over from an earlier render of this same bubble.
+  for (const stale of host.querySelectorAll(':scope > .rich__expand')) stale.remove();
+
+  const answerId = key || answerKey(container.textContent);
+  const decision = decorateDecision(container.textContent || '', {
+    expanded: expandedAnswers.has(answerId),
+  });
+
+  if (!decision.collapse) {
+    container.classList.remove('rich--long', 'rich--expanded');
+    return;
+  }
+
   container.classList.add('rich--long');
+  container.classList.toggle('rich--expanded', decision.expanded);
 
   const btn = document.createElement('button');
   btn.type = 'button';
   btn.className = 'rich__expand';
-  btn.textContent = 'Show full answer';
+  btn.textContent = decision.label;
+  btn.setAttribute('aria-expanded', String(decision.expanded));
   btn.addEventListener('click', () => {
-    const expanded = container.classList.toggle('rich--expanded');
-    btn.textContent = expanded ? 'Show less' : 'Show full answer';
+    const next = !container.classList.contains('rich--expanded');
+    if (next) expandedAnswers.add(answerId);
+    else expandedAnswers.delete(answerId);
+
+    // Expanding changes the height of one bubble; it must not move the reader.
+    const scroller = el.messages;
+    const before = scroller ? scroller.scrollTop : 0;
+    container.classList.toggle('rich--expanded', next);
+    btn.textContent = expandLabel(next);
+    btn.setAttribute('aria-expanded', String(next));
+    if (scroller) scroller.scrollTop = before;
   });
-  container.append(btn);
+
+  // Sibling, never a child: `overflow: hidden` on the body would clip the
+  // button too, which is exactly how long answers became unreadable.
+  container.insertAdjacentElement('afterend', btn);
 }
 
 /** One entry point for every assistant answer, live or replayed from history. */
-function renderRich(element, markdown) {
+function renderRich(element, markdown, { streaming = false, key = '' } = {}) {
   const { text, math } = extractMath(markdown || '');
   element.innerHTML = renderMarkdown(text);
   decorateCodeBlocks(element);
-  decorateLongAnswer(element);
+  // While a reply streams it is always shown in full; the preview is
+  // recalculated once, after the last token has arrived.
+  if (!streaming) decorateLongAnswer(element, key);
   if (math.length) {
     if (katexLib) {
       paintMath(element, math);
@@ -707,7 +740,7 @@ function buildMessageElement(message, index) {
     body.textContent = message.content;
   } else {
     body.className = 'md';
-    renderRich(body, message.content);
+    renderRich(body, message.content, { key: answerKey(message.content) });
   }
   content.append(body);
 
@@ -1534,7 +1567,7 @@ async function requestReply(conversation) {
     renderQueued = true;
     requestAnimationFrame(() => {
       renderQueued = false;
-      renderRich(md, latest);
+      renderRich(md, latest, { streaming: true });
       const caret = document.createElement('span');
       caret.className = 'caret';
       md.append(caret);
@@ -1584,7 +1617,7 @@ async function requestReply(conversation) {
       }, 1500);
     });
 
-    renderRich(md, latest);
+    renderRich(md, latest, { key: answerKey(latest) });
     if (result.aborted) {
       const note = document.createElement('p');
       note.style.cssText = 'margin:6px 0 0;font-size:.72rem;color:var(--text-faint);';
