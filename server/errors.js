@@ -54,6 +54,40 @@ export const errors = {
       retryable: true,
     }),
 
+  /**
+   * The provider is reachable but the model is busy ("high demand", 503,
+   * overload). Transient by nature, so it IS retryable with backoff.
+   */
+  upstreamOverloaded: (
+    retryAfterSeconds = null,
+    message = 'The AI model is busy right now. This is temporary - please try again in a moment.',
+    hint = null,
+  ) =>
+    new AppError(503, 'upstream_overloaded', message, {
+      hint,
+      retryAfter: retryAfterSeconds,
+      retryable: true,
+    }),
+
+  /**
+   * The request itself is wrong (bad role order, unsupported parameter, model
+   * refusing images, ...). Retrying the identical request cannot help, so this
+   * is explicitly NOT retryable.
+   */
+  upstreamInvalid: (
+    hint = null,
+    message = 'The AI provider rejected this request as invalid.',
+  ) => new AppError(502, 'upstream_invalid_request', message, { hint, retryable: false }),
+
+  /** The provider account is out of credits/quota. Needs human action. */
+  upstreamQuota: (hint = null) =>
+    new AppError(
+      502,
+      'upstream_quota_exhausted',
+      'The AI provider account is out of quota or credits for this model.',
+      { hint, retryable: false },
+    ),
+
   upstreamAuth: (hint = null) =>
     new AppError(
       502,
@@ -105,6 +139,34 @@ export function mapUpstreamError(status, body, config = {}, retryAfterHeader = n
     return err;
   }
 
+  // ---------------------------------------------------------------------
+  // Classify the REAL reason before trusting the status code.
+  //
+  // Gemini reports overload and quota conditions with 400/429/503 and puts the
+  // truth in error.status / error.details[].reason. Without this check, a
+  // "model is experiencing high demand" reply was reported to the user as
+  // "the provider rejected the request as invalid" - wrong, and unretryable.
+  // ---------------------------------------------------------------------
+  const kind = classifyUpstream(status, body);
+
+  if (kind === 'overload') {
+    return errors.upstreamOverloaded(
+      extractRetryAfter(body, retryAfterHeader),
+      `The AI model${config.model ? ` "${config.model}"` : ''} is busy right now. This is temporary - please try again in a moment.`,
+      detail
+        ? `Provider message: ${detail}`
+        : 'Demand spikes are usually short. Retrying shortly normally works.',
+    );
+  }
+
+  if (kind === 'quota') {
+    return errors.upstreamQuota(
+      detail
+        ? `Provider message: ${detail}`
+        : 'Add credits, or switch AI_MODEL / AI_PROVIDER to a free option.',
+    );
+  }
+
   if (status === 429) {
     const retryAfter = extractRetryAfter(body, retryAfterHeader);
     return errors.upstreamRateLimited(
@@ -151,6 +213,100 @@ export function mapUpstreamError(status, body, config = {}, retryAfterHeader = n
     'The AI service returned an unexpected response.',
     detail || `Upstream status ${status}.`,
   );
+}
+
+/**
+ * Work out WHY the provider refused, instead of trusting the HTTP status alone.
+ *
+ * Google-style payloads carry the real condition in `error.status`:
+ *   RESOURCE_EXHAUSTED -> rate limit or account quota (never "invalid")
+ *   UNAVAILABLE        -> model busy / high demand (transient, retryable)
+ *   INVALID_ARGUMENT   -> genuinely malformed request (retry cannot help)
+ *
+ * Exported so the classification itself can be unit tested.
+ *
+ * @returns {'auth'|'quota'|'overload'|'rate_limit'|'not_found'|'invalid'|'server'|'unknown'}
+ */
+export function classifyUpstream(status, body) {
+  const providerStatus = String(body?.error?.status ?? '').toUpperCase();
+  const reason = extractReason(body).toUpperCase();
+  const message = extractDetail(body).toLowerCase();
+
+  const quotaish =
+    /quota|billing|credits?\b|exceeded your current|payment required/.test(message) ||
+    /QUOTA|BILLING|CREDIT/.test(reason);
+  const demandish =
+    /high demand|overloaded|over capacity|spike in demand|temporarily unavailable|service unavailable|try again later/.test(
+      message,
+    );
+  const ratelimitish =
+    /rate limit|too many requests|requests per|per-minute|per minute/.test(message) ||
+    /RATE_LIMIT/.test(reason);
+
+  if (
+    status === 401 ||
+    status === 403 ||
+    providerStatus === 'UNAUTHENTICATED' ||
+    providerStatus === 'PERMISSION_DENIED'
+  ) {
+    return 'auth';
+  }
+  if (status === 402 || quotaish) return 'quota';
+  // Checked before the 429 branch: a 429 that says "high demand" is an overload,
+  // and saying so is more useful than claiming a rate limit.
+  if (demandish) return 'overload';
+  if (ratelimitish) return 'rate_limit';
+  if (status === 429 || providerStatus === 'RESOURCE_EXHAUSTED') return 'rate_limit';
+  if (
+    providerStatus === 'UNAVAILABLE' ||
+    providerStatus === 'DEADLINE_EXCEEDED' ||
+    status === 503 ||
+    status === 504 ||
+    status === 529
+  ) {
+    return 'overload';
+  }
+  if (status === 404 || providerStatus === 'NOT_FOUND') return 'not_found';
+  if (
+    status === 400 ||
+    status === 422 ||
+    providerStatus === 'INVALID_ARGUMENT' ||
+    providerStatus === 'FAILED_PRECONDITION'
+  ) {
+    return 'invalid';
+  }
+  if (status >= 500) return 'server';
+  return 'unknown';
+}
+
+/**
+ * Structured, secret-free description of an upstream failure for the server log.
+ * Never includes headers or the API key.
+ */
+export function describeUpstream(status, body, config = {}) {
+  return {
+    status,
+    kind: classifyUpstream(status, body),
+    providerStatus: String(body?.error?.status ?? '').slice(0, 40) || null,
+    reason: extractReason(body).slice(0, 60) || null,
+    model: config.model ?? null,
+    style: config.style ?? null,
+    detail: extractDetail(body).slice(0, 160) || null,
+  };
+}
+
+/**
+ * Machine-readable reason from a Google-style payload:
+ * `error.details[] = { reason: 'RATE_LIMIT_EXCEEDED', ... }`.
+ */
+export function extractReason(body) {
+  const details = body?.error?.details;
+  if (!Array.isArray(details)) return '';
+  for (const entry of details) {
+    const reason = entry?.reason ?? entry?.errorInfo?.reason;
+    if (typeof reason === 'string' && reason.trim()) return reason.trim();
+  }
+  return '';
 }
 
 /** Pull a human readable message out of an arbitrary provider error payload. */
