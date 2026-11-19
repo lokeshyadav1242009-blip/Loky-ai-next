@@ -12,7 +12,8 @@
  * module just surfaces what the database allows.
  */
 
-import { normalizeUsername } from './username-utils.js';
+import { normalizeUsername, suggestUsername } from './username-utils.js';
+import { buildOAuthUrl } from './auth-utils.js';
 
 /** Session storage is deliberately separate from both other storage keys. */
 export const AUTH_STORAGE_KEY = 'loky.ai.next.auth.v1';
@@ -627,6 +628,90 @@ export async function saveUsername(rawUsername, displayName) {
 /* --------------------------------- people --------------------------------- */
 
 /** Search registered users by username prefix (>= 2 chars). */
+/**
+ * Public auth settings for this Supabase project (which external providers are
+ * enabled, whether email confirmation is on).
+ *
+ * Unauthenticated and side-effect free. Returns null when it cannot be read so
+ * callers can simply hide optional UI instead of showing a dead button.
+ */
+export async function loadAuthSettings() {
+  try {
+    const config = await loadConfig();
+    const response = await fetchWithTimeout(`${config.url}/auth/v1/settings`, {
+      method: 'GET',
+      headers: { apikey: config.anonKey, Accept: 'application/json' },
+    });
+    if (!response.ok) return null;
+    const payload = await readJson(response);
+    return payload && typeof payload === 'object' ? payload : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Begin a Supabase OAuth sign-in by redirecting to the provider.
+ *
+ * The return trip lands on the site with `#access_token=…`, which the existing
+ * confirmation handler already turns into a stored session — so Google sign-in
+ * reuses the verified session path instead of inventing a second one. Only the
+ * publishable anon key travels in the URL.
+ */
+export async function startOAuth(provider = 'google') {
+  if (typeof window === 'undefined' || !window.location) {
+    throw new SupabaseError('auth', 'This sign-in option needs a browser.');
+  }
+  const config = await loadConfig();
+  const origin = window.location.origin ? `${window.location.origin}/` : '';
+  const url = buildOAuthUrl({
+    baseUrl: config.url,
+    provider,
+    redirectTo: origin,
+    apikey: config.anonKey,
+  });
+  if (!url) throw new SupabaseError('auth', 'This sign-in option is not available right now.');
+  window.location.assign(url);
+}
+
+/**
+ * Ensure the signed-in account has a profile row with a username.
+ *
+ * Signup no longer asks for a username, so a fresh account — or one arriving
+ * from a confirmation link — gets one derived from its email address. A taken
+ * name is retried with a numeric suffix; the database unique index stays the
+ * authority and an existing real username is never overwritten.
+ */
+export async function ensureProfile({ displayName = '', attempts = 5 } = {}) {
+  const user = currentUser();
+  if (!user) throw new SupabaseError('signed_out', 'Please sign in first.', 401);
+
+  const existing = await getMyProfile();
+  if (existing && existing.username) return existing;
+
+  const email = typeof user.email === 'string' ? user.email : '';
+  const limit = Math.max(1, Math.min(10, Math.floor(Number(attempts) || 5)));
+  let lastError = null;
+
+  for (let attempt = 0; attempt < limit; attempt += 1) {
+    const candidate = suggestUsername(email, attempt);
+    if (!candidate) break;
+    try {
+      return await saveUsername(candidate, displayName);
+    } catch (error) {
+      if (error instanceof SupabaseError && error.code === 'username_taken') {
+        lastError = error;
+        continue;
+      }
+      throw error;
+    }
+  }
+
+  throw lastError instanceof SupabaseError
+    ? lastError
+    : new SupabaseError('username_taken', 'We could not create a default username. Please choose one.');
+}
+
 export async function searchUsers(term) {
   const query = normalizeUsername(term);
   if (query.length < 2) return [];
