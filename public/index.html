@@ -97,26 +97,47 @@
         <form class="authgate__screen" id="authSignIn" hidden novalidate>
           <h1 class="authgate__title">Welcome back</h1>
           <p class="authgate__lead">Sign in to open your assistant and your chats.</p>
+          <!-- Google is rendered only when the Supabase project reports the
+               provider as enabled, so this can never be a dead button. -->
+          <div class="authgate__oauth" id="authOauth" hidden>
+            <button class="authgate__oauthbtn" id="authGoogleBtnSignIn" type="button">
+              <span class="authgate__oauthicon" aria-hidden="true">G</span>
+              <span class="authgate__oauthlabel">Continue with Google</span>
+            </button>
+            <p class="authgate__divider"><span>or use your email</span></p>
+          </div>
           <label class="authgate__label" for="authEmail">Email</label>
           <input class="authgate__input" id="authEmail" name="email" type="email" inputmode="email" autocomplete="email" placeholder="you@example.com" required />
           <label class="authgate__label" for="authPassword">Password</label>
-          <input class="authgate__input" id="authPassword" name="password" type="password" autocomplete="current-password" placeholder="Your password" required />
+          <div class="authgate__field">
+            <input class="authgate__input authgate__input--password" id="authPassword" name="password" type="password" autocomplete="current-password" placeholder="Your password" required />
+            <button class="authgate__toggle" id="authPasswordToggle" type="button" aria-label="Show password" aria-pressed="false">Show</button>
+          </div>
           <button class="btn btn--primary authgate__submit" id="authSignInBtn" type="submit">Sign in</button>
           <p class="authgate__switch">New to LOKY AI? <button class="link-btn" id="authGoSignUp" type="button">Create account</button></p>
         </form>
 
+        <!-- Signup asks for an email and a password only. The profile (and a
+             unique username) is created automatically after the account exists,
+             and can be customised later from the profile dialog. -->
         <form class="authgate__screen" id="authSignUp" hidden novalidate>
-          <h2 class="authgate__title">Create account</h2>
-          <p class="authgate__lead">One account for the assistant and for messaging people.</p>
-          <label class="authgate__label" for="authDisplayName">Display name</label>
-          <input class="authgate__input" id="authDisplayName" name="name" type="text" maxlength="60" autocomplete="name" placeholder="Lokesh Yadav" />
-          <label class="authgate__label" for="authUsernameNew">Username</label>
-          <input class="authgate__input" id="authUsernameNew" name="username" type="text" maxlength="20" autocomplete="nickname" autocapitalize="none" spellcheck="false" placeholder="your_username" required />
-          <p class="authgate__help" id="authSignupHelp">3–20 letters, numbers or _ — this is how people find you.</p>
+          <h2 class="authgate__title">Create your account</h2>
+          <p class="authgate__lead">Just an email and a password — we set up your profile for you.</p>
+          <div class="authgate__oauth" id="authOauthSignup" hidden>
+            <button class="authgate__oauthbtn" id="authGoogleBtn" type="button">
+              <span class="authgate__oauthicon" aria-hidden="true">G</span>
+              <span class="authgate__oauthlabel">Continue with Google</span>
+            </button>
+            <p class="authgate__divider"><span>or use your email</span></p>
+          </div>
           <label class="authgate__label" for="authEmailNew">Email</label>
-          <input class="authgate__input" id="authEmailNew" name="email" type="email" inputmode="email" autocomplete="email" placeholder="you@example.com" required />
+          <input class="authgate__input" id="authEmailNew" name="email" type="email" inputmode="email" autocomplete="email" autocapitalize="none" spellcheck="false" placeholder="you@example.com" required />
           <label class="authgate__label" for="authPasswordNew">Password</label>
-          <input class="authgate__input" id="authPasswordNew" name="password" type="password" autocomplete="new-password" placeholder="At least 6 characters" required />
+          <div class="authgate__field">
+            <input class="authgate__input authgate__input--password" id="authPasswordNew" name="password" type="password" autocomplete="new-password" placeholder="Create a password" required />
+            <button class="authgate__toggle" id="authPasswordNewToggle" type="button" aria-label="Show password" aria-pressed="false">Show</button>
+          </div>
+          <ul class="authgate__req" id="authPasswordNewReq" aria-live="polite"></ul>
           <button class="btn btn--primary authgate__submit" id="authSignUpBtn" type="submit">Create account</button>
           <p class="authgate__switch">Already have an account? <button class="link-btn" id="authGoSignIn" type="button">Sign in</button></p>
         </form>
