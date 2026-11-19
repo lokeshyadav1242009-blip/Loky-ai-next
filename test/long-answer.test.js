@@ -39,7 +39,7 @@ const LONG_MATH = [
   '',
   'Checking: $1^2 - 3(1) + 2 = 0$ and $2^2 - 3(2) + 2 = 0$.',
   '',
-  words(120, 'step'),
+  words(500, 'step'),
 ].join('\n');
 
 const LONG_MARKDOWN = [
@@ -67,7 +67,7 @@ const LONG_MARKDOWN = [
   'const force = (mass, accel) => mass * accel;',
   '```',
   '',
-  words(140, 'body'),
+  words(500, 'body'),
 ].join('\n');
 
 const MULTI_CODE = [
@@ -86,7 +86,7 @@ const MULTI_CODE = [
   'npm test',
   '```',
   '',
-  words(160, 'tail'),
+  words(500, 'tail'),
 ].join('\n');
 
 /* -------------------------------------------------------------------------- */
