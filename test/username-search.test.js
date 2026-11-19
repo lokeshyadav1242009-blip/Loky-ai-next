@@ -70,10 +70,12 @@ test('describeSearchState surfaces search failures', () => {
     kind: 'error',
     message: 'Network problem.',
   });
+  // An empty error string means "no error": fall through to the real state.
   assert.deepEqual(describeSearchState({ term: 'sunita', count: 0, error: '' }), {
-    kind: 'idle',
-    message: 'Search a username to find people.',
+    kind: 'empty',
+    message: 'No users found for “@sunita”.',
   });
+  assert.equal(describeSearchState({ term: '', count: 0, error: '' }).kind, 'idle');
 });
 
 test('describeSearchState asks for input when the term is too short', () => {
