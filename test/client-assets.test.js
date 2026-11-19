@@ -155,7 +155,7 @@ test('app.js wires the section switch without unmounting the assistant', () => {
 });
 
 test('the Messages client module is loaded as an ES module', () => {
-  assert.match(html, /<script type="module" src="\/app\.js">/);
+  assert.match(html, /<script type="module" src="\/app\.js(\?v=[\w.-]+)?">/);
   assert.match(js, /from '\.\/messages\.js'/);
   assert.match(messagesJs, /from '\.\/messages-utils\.js'/);
 });
@@ -293,4 +293,12 @@ test('asset-looking paths are recognised so the shell is never served for them',
   assert.equal(isAssetPath('/messages/abc-123'), false);
   assert.equal(isAssetPath('/'), false);
   assert.equal(isAssetPath(''), false);
+});
+
+test('app.js and upgrade.css carry a cache-busting version query', () => {
+  // express.static serves these with max-age=3600 and the shell used to
+  // reference them unversioned, so a browser could keep running the previous
+  // bundle for an hour after a deploy and a normal reload would not help.
+  assert.match(html, /src="\/app\.js\?v=[\w.-]+"/);
+  assert.match(html, /href="\/upgrade\.css\?v=[\w.-]+"/);
 });

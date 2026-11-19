@@ -215,10 +215,6 @@
   display: none;
 }
 
-.memory[hidden] {
-  display: none;
-}
-
 .memory__shell {
   display: flex;
   flex-direction: column;
