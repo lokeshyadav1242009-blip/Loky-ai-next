@@ -99,6 +99,43 @@ export function displayUsername(raw) {
 }
 
 /**
+ * Suggest a valid username derived from an email address.
+ *
+ * Used to give every new account a profile without asking for one during
+ * signup. `attempt` 0 is the plain local part; higher attempts add a numeric
+ * suffix so a taken name is retried instead of failing. Uniqueness itself is
+ * still decided by the database unique index — this only produces candidates.
+ *
+ * @param {string} email
+ * @param {number} attempt 0 = no suffix, 1+ = add digits
+ * @param {() => number} random injectable for tests
+ * @returns {string} a valid username, or '' when nothing valid can be derived
+ */
+export function suggestUsername(email, attempt = 0, random = Math.random) {
+  const local = typeof email === 'string' ? email.split('@')[0] : '';
+  let base = local
+    .toLowerCase()
+    .replace(/[^a-z0-9_]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+
+  if (base.length < USERNAME_MIN_LENGTH) base = 'lokyuser';
+  base = base.slice(0, 12);
+  if (base.length < USERNAME_MIN_LENGTH) base = 'lokyuser';
+  if (RESERVED_USERNAMES.has(base)) base = `${base}_loky`.slice(0, USERNAME_MAX_LENGTH);
+
+  const step = Math.max(0, Math.floor(Number(attempt) || 0));
+  let candidate = base;
+  if (step > 0) {
+    const draw = typeof random === 'function' ? random() : Math.random();
+    const digits = String(1000 + Math.floor(Math.abs(draw) * 9000));
+    candidate = `${base}_${digits}`.slice(0, USERNAME_MAX_LENGTH);
+  }
+
+  const check = validateUsername(candidate);
+  return check.ok ? check.value : '';
+}
+
+/**
  * Deterministic dedupe key for a direct conversation between two users.
  * Sorting the ids means (a,b) and (b,a) produce the same key, which is what
  * lets the database enforce "one conversation per pair".

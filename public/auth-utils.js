@@ -262,7 +262,97 @@ export function normalizeDisplayName(raw) {
 }
 
 /**
+ * Live password requirements for the signup screen.
+ *
+ * The list mirrors what validatePassword() enforces, so the ticks the user
+ * sees and the error they would get can never disagree. The project may still
+ * be stricter; that surfaces from the API as `weak_password`.
+ *
+ * @returns {Array<{ id: string, label: string, met: boolean }>}
+ */
+export function passwordChecks(raw) {
+  const value = typeof raw === 'string' ? raw : '';
+  return [
+    {
+      id: 'length',
+      label: `At least ${PASSWORD_MIN_LENGTH} characters`,
+      met: value.length >= PASSWORD_MIN_LENGTH,
+    },
+    {
+      id: 'max',
+      label: `No more than ${PASSWORD_MAX_LENGTH} characters`,
+      met: value.length > 0 && value.length <= PASSWORD_MAX_LENGTH,
+    },
+    { id: 'spaces', label: 'Not only spaces', met: value.length > 0 && !/^\s+$/.test(value) },
+  ];
+}
+
+/**
+ * Validate the credentials a new account actually needs: an email and a
+ * password. Username and display name are no longer collected here — the
+ * profile is generated after the account exists.
+ *
+ * @returns {{ ok: boolean, errors: { email?: string, password?: string }, value: { email: string, password: string } }}
+ */
+export function validateSignupCredentials(fields = {}) {
+  const errors = {};
+
+  const email = validateEmail(fields.email);
+  if (!email.ok) errors.email = email.error;
+
+  const password = validatePassword(fields.password);
+  if (!password.ok) errors.password = password.error;
+
+  return {
+    ok: Object.keys(errors).length === 0,
+    errors,
+    value: {
+      email: typeof fields.email === 'string' ? fields.email.trim() : '',
+      password: typeof fields.password === 'string' ? fields.password : '',
+    },
+  };
+}
+
+/* ---------------------------------- OAuth --------------------------------- */
+
+/**
+ * Build the Supabase OAuth authorize URL for a provider.
+ *
+ * The browser is redirected here; Supabase then redirects to the provider and
+ * back to `redirectTo`, where the existing confirmation-link handler already
+ * turns `#access_token=…` into a stored session. Only public values go in the
+ * URL: the anon key is publishable by design and no secret is ever included.
+ *
+ * @returns {string} absolute URL, or '' when it cannot be built
+ */
+export function buildOAuthUrl({ baseUrl = '', provider = 'google', redirectTo = '', apikey = '' } = {}) {
+  const base = String(baseUrl || '').replace(/\/+$/, '');
+  const name = String(provider || '');
+  if (!base || !/^[a-z0-9_-]+$/i.test(name)) return '';
+
+  const params = new URLSearchParams({ provider: name });
+  if (redirectTo) params.set('redirect_to', String(redirectTo));
+  if (apikey) params.set('apikey', String(apikey));
+  return `${base}/auth/v1/authorize?${params.toString()}`;
+}
+
+/**
+ * Is an external provider actually enabled on this Supabase project?
+ *
+ * Read from the public /auth/v1/settings payload. A project without Google
+ * credentials reports false, so the button is never shown as a dead end.
+ */
+export function isProviderEnabled(settings, provider = 'google') {
+  const external = settings && typeof settings === 'object' ? settings.external : null;
+  if (!external || typeof external !== 'object') return false;
+  return external[provider] === true;
+}
+
+/**
  * Validate the whole signup form in one pass.
+ *
+ * Kept for the one-time username step (accounts created before automatic
+ * profiles existed). The main signup screen no longer asks for a username.
  *
  * `fields` is the raw input; `options.checkUsername` is false when the project
  * cannot answer availability for a signed-out caller (it then only reports
