@@ -232,9 +232,13 @@ function preferenceFact(text) {
 }
 
 function decisionFact(text) {
-  const match = /(?:we|i)\s+(?:decided|finali[sz]ed|finali[sz]e|chose|chosen|settled on|went with)\s+([^.,\n!?]{3,70})/i.exec(text);
+  const match =
+    /(?:we|i|hum|humne|maine|main)\s+(?:decided|finali[sz]ed|finali[sz]e|chose|chosen|settled on|went with|decide kiya)\s+([^.,\n!?]{3,70})/i.exec(
+      text,
+    );
   if (!match) return null;
-  const value = clean(match[1]).replace(/^(?:a|an|the|to)\s+/i, '');
+  // "decided ki Supabase use karenge" — drop the connector, keep the decision.
+  const value = clean(match[1]).replace(/^(?:a|an|the|to|ki|that)\s+/i, '');
   if (!value) return null;
   return { kind: 'decision', slot: `decision:${lower(value).slice(0, 40)}`, label: 'Decision', value };
 }
