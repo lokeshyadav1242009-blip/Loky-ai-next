@@ -15,6 +15,7 @@ import { parseSuperAdminIds, SUPER_ADMIN_ENV } from './superadmin.js';
 import { isAssetPath } from './asset-path.js';
 import { createMemoryRouter, bearerToken } from './memory-routes.js';
 import { memoryBlockForRequest } from './memory.js';
+import { scheduleMemoryExtraction } from './memory-extract.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const publicDir = path.resolve(__dirname, '..', 'public');
@@ -191,13 +192,14 @@ app.post('/api/chat', rateLimitMiddleware(limiter), requireAuth, async (req, res
 
   // 3. LOKY MEMORY: attach only the notes that match this question. Memory is a
   //    bonus, never a dependency - any failure simply answers without it.
+  const authToken = bearerToken(req);
   let systemExtra = '';
   try {
     const lastUser = [...messages].reverse().find((m) => m.role === 'user');
     const question = typeof lastUser?.content === 'string' ? lastUser.content : '';
     systemExtra = await memoryBlockForRequest({
       config,
-      token: bearerToken(req),
+      token: authToken,
       question,
     });
   } catch {
@@ -236,11 +238,13 @@ app.post('/api/chat', rateLimitMiddleware(limiter), requireAuth, async (req, res
   });
 
   let aborted = false;
+  let replyText = '';
   try {
     for await (const delta of streamChat(config, messages, {
       signal: abortController.signal,
       systemExtra,
     })) {
+      replyText += delta;
       send({ type: 'delta', text: delta });
     }
   } catch (error) {
@@ -262,6 +266,22 @@ app.post('/api/chat', rateLimitMiddleware(limiter), requireAuth, async (req, res
       res.end();
     } else if (!res.writableEnded) {
       res.end();
+    }
+
+    // 5. LOKY MEMORY: learn from the finished turn. This runs after the answer
+    //    has been flushed, so extraction can never add latency to a reply, and
+    //    it is fire-and-forget: a failure is logged inside the pipeline and the
+    //    chat response is already complete.
+    if (!aborted && replyText.trim()) {
+      scheduleMemoryExtraction({
+        config,
+        token: authToken,
+        messages,
+        reply: replyText,
+        conversationId: req.body?.conversationId,
+        log: (message, detail) =>
+          console.warn(message, detail === undefined ? '' : detail),
+      });
     }
   }
 });

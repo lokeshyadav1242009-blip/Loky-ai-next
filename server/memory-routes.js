@@ -125,6 +125,11 @@ export function createMemoryRouter() {
         category: req.body?.category,
         pinned: req.body?.pinned,
         source: req.body?.source,
+        // Optional intelligence fields. The store clamps them and simply omits
+        // them when the database has not applied migration 0005 yet.
+        importance: req.body?.importance,
+        confidence: req.body?.confidence,
+        sourceConversationId: req.body?.sourceConversationId,
       });
       return res.status(201).json({ memory });
     } catch (error) {
