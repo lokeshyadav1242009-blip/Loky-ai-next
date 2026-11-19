@@ -331,8 +331,8 @@ async function* streamOnce(config, messages, options = {}, state = null) {
   }
 
   if (!sawContent) {
-    // Distinguish "the model refused" from "the model is busy and sent nothing".
-    // The busy case is retryable; the blocked case never is.
+    // Distinguish "the model refused" (a filter decision) from "the model sent
+    // nothing at all" (a provider fault). Neither one is a demand spike.
     const blocked = ['SAFETY', 'RECITATION', 'PROHIBITED_CONTENT', 'BLOCKLIST'].includes(
       String(finishReason).toUpperCase(),
     );
@@ -347,9 +347,9 @@ async function* streamOnce(config, messages, options = {}, state = null) {
         },
       );
     }
-    throw errors.upstreamOverloaded(
-      null,
-      'The AI model returned an empty answer - it may be busy right now. Please try again.',
+    throw errors.upstreamError(
+      'The AI service returned an empty response.',
+      'The model finished without sending any text. Please try again.',
     );
   }
 }

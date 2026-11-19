@@ -133,6 +133,9 @@ export function planContext(conversation, budget = DEFAULT_CONTEXT_BUDGET) {
 export function buildSummaryPayload(conversation, { maxChars = 24000 } = {}) {
   const plan = planContext(conversation);
   const older = plan.summarisable;
+  // Below the threshold a summary is noise, not context: never spend a
+  // provider call on a handful of turns.
+  if (plan.pending.length <= MIN_MESSAGES_BEFORE_SUMMARY) return null;
   if (older.length === 0) return null;
 
   const messages = older.map((message) => ({
