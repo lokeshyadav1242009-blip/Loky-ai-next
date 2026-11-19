@@ -39,10 +39,20 @@ export const MAX_TRANSCRIPT_CHARS = 4000;
 export const DEFAULT_TIMEOUT_MS = 20000;
 /** Below this importance a fact is too transient to be worth a row. */
 export const MIN_IMPORTANCE = 0.35;
-/** At or above this similarity two notes are treated as the same fact. */
-export const SUPERSEDE_SIMILARITY = 0.55;
-/** Between this and SUPERSEDE_SIMILARITY the change is ambiguous. */
-export const AMBIGUOUS_SIMILARITY = 0.3;
+/**
+ * At or above this similarity two notes are the same fact.
+ *
+ * Kept high on purpose: rewriting the wrong row loses the user's own words,
+ * while a missed merge is visible and fixable on the Memory page.
+ */
+export const SUPERSEDE_SIMILARITY = 0.7;
+/**
+ * Between this and SUPERSEDE_SIMILARITY the notes are clearly related but not
+ * provably the same claim ("preparing for JEE physics" vs "...chemistry").
+ * Those are neither merged nor stored, so a contradiction is never created
+ * silently — the user sees the existing note and can edit it themselves.
+ */
+export const AMBIGUOUS_SIMILARITY = 0.4;
 
 export const EXTRACTION_SYSTEM = [
   'You maintain the long-term memory of LOKY AI, an assistant.',

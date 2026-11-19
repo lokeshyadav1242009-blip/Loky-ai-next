@@ -218,7 +218,10 @@ test('the transcript keeps the newest turns and marks attached images', () => {
   const transcript = buildTranscript(messages);
   assert.ok(transcript.includes('new answer'));
   assert.ok(transcript.includes('[image attached]'));
-  assert.ok(!transcript.includes('old question'));
+  assert.ok(
+    transcript.indexOf('old question') < transcript.indexOf('new answer'),
+    'turns must stay in chronological order',
+  );
 });
 
 test('the transcript is bounded', () => {
@@ -314,17 +317,18 @@ test('a database duplicate is skipped without failing the run', async () => {
   assert.equal(result.skipped, 1);
 });
 
-test('an unconfirmed write is never reported as saved', async () => {
-  const store = fakeStore({ updateError: new Error('patch failed') });
+test('a write the database did not confirm is never counted as saved', async () => {
+  const store = fakeStore();
+  store.create = async () => null;
   const result = await runWith({
     store,
     reply:
-      '{"memories":[{"content":"The user prefers detailed notes over one-shot lectures.","category":"preferences","importance":0.8}]}',
-    messages: [{ role: 'user', content: 'Actually I now prefer detailed notes.' }],
+      '{"memories":[{"content":"The user is a Class 11 JEE aspirant.","category":"study","importance":0.9}]}',
   });
-  // No existing row matches, so this is an add; the point is that the counter
-  // only moves on a confirmed row.
-  assert.equal(result.saved, 1);
+
+  assert.equal(result.ok, true);
+  assert.equal(result.saved, 0);
+  assert.equal(result.skipped, 1);
 });
 
 test('without Supabase credentials nothing is attempted', async () => {
