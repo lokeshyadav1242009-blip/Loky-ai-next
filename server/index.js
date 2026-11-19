@@ -6,6 +6,17 @@ import { fileURLToPath } from 'node:url';
 import { config, isConfigured } from './config.js';
 import { AppError, errors } from './errors.js';
 import { streamChat } from './providers.js';
+import {
+  DEFAULT_CONTEXT_TOKENS,
+  selectWindow,
+  conversationTokens,
+  normalizeSummaryInput,
+  summaryBlock,
+  validateSummaryRequest,
+  buildSummaryMessages,
+  SUMMARY_SYSTEM_PROMPT,
+  normalizeSummary,
+} from './context.js';
 import { validateChatRequest } from './validate.js';
 import { createRateLimiter, rateLimitMiddleware } from './rateLimit.js';
 import { createAdminRouter } from './admin.js';
@@ -149,6 +160,43 @@ const limiter = createRateLimiter({
 limiter.windowMs = config.limits.rateLimitWindowMs;
 
 /**
+ * POST /api/summarize  ->  { summary, chars }
+ *
+ * Compresses older turns into a rolling summary so a conversation can keep going
+ * past the model's context window. Runs server-side, so the provider key never
+ * reaches the browser, and it is a separate call so it never delays a reply.
+ */
+app.post('/api/summarize', rateLimitMiddleware(limiter), requireAuth, async (req, res) => {
+  if (!isConfigured(config)) {
+    return sendError(res, errors.notConfigured(missingSettings(config).join(' and ')));
+  }
+
+  const { messages, previousSummary, error } = validateSummaryRequest(req.body, config.limits);
+  if (error) return sendError(res, errors.badRequest(error));
+
+  let text = '';
+  try {
+    for await (const delta of streamChat(
+      config,
+      buildSummaryMessages(messages, previousSummary),
+      // One retry is enough here: a summary is helpful, never critical, and a
+      // long backoff would stall the user's next message.
+      { systemExtra: SUMMARY_SYSTEM_PROMPT, maxAttempts: 2 },
+    )) {
+      text += delta;
+    }
+  } catch (error) {
+    return sendError(res, error instanceof AppError ? error : errors.internal());
+  }
+
+  const summary = normalizeSummary(text);
+  if (!summary) {
+    return sendError(res, errors.upstreamError('The summariser returned an empty summary.'));
+  }
+  return res.json({ summary, chars: summary.length });
+});
+
+/**
  * POST /api/chat  ->  text/event-stream
  *
  * Events:
@@ -190,6 +238,23 @@ app.post('/api/chat', rateLimitMiddleware(limiter), requireAuth, async (req, res
     return sendError(res, error);
   }
 
+  // 2b. TOKEN-AWARE WINDOW.
+  //     The browser keeps the complete history for display and sends a rolling
+  //     summary for anything older, so the model sees a bounded window while the
+  //     user loses nothing. Trimming by tokens (not message count) is what lets a
+  //     conversation run past the context limit without failing.
+  const clientSummary = normalizeSummaryInput(req.body?.summary);
+  const budget = config.limits?.contextTokens ?? DEFAULT_CONTEXT_TOKENS;
+  const windowed = selectWindow(messages, budget);
+  messages = windowed.recent;
+  const contextMeta = {
+    tokens: conversationTokens(messages),
+    budget,
+    trimmed: windowed.trimmed,
+    summaryUsed: Boolean(clientSummary),
+    dropped: windowed.older.length,
+  };
+
   // 3. LOKY MEMORY: attach only the notes that match this question. Memory is a
   //    bonus, never a dependency - any failure simply answers without it.
   const authToken = bearerToken(req);
@@ -205,6 +270,15 @@ app.post('/api/chat', rateLimitMiddleware(limiter), requireAuth, async (req, res
   } catch {
     systemExtra = '';
   }
+
+  // Older turns are represented by the rolling summary. When the window was
+  // trimmed without one, say so explicitly, otherwise the model assumes the
+  // conversation simply started and asks the user to repeat themselves.
+  const trimNote =
+    windowed.trimmed && !clientSummary
+      ? 'Earlier messages were shortened for length. Continue from the recent messages without restarting the discussion.'
+      : '';
+  systemExtra = [summaryBlock(clientSummary), systemExtra, trimNote].filter(Boolean).join('\n\n');
 
   // 4. Open the SSE stream and pipe tokens through.
   res.writeHead(200, {

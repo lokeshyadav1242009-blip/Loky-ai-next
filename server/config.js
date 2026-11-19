@@ -91,6 +91,19 @@ const DEFAULT_SYSTEM_PROMPT = [
   'Answer in well-structured Markdown. Use headings, bullet lists and tables where they help.',
   'Always wrap code in fenced code blocks with the correct language tag.',
   'If you are unsure about something, say so instead of inventing facts.',
+  // Maths: the client renders KaTeX, so emit real LaTeX instead of ASCII art.
+  'For mathematics, write LaTeX: $...$ inline and $$...$$ on its own line for display equations.',
+  'Never use x or * for multiplication, and never write a fraction as a/b — use \\frac{a}{b}.',
+  'Use \\sqrt{}, powers with ^, subscripts with _, \\int, \\lim, \\sum, \\sin, \\cos and \\tan as appropriate.',
+  'For a worked problem, use these sections when they genuinely help: Given, Required, Formula, Substitution, Calculation, Final Answer.',
+  'Put each calculation step on its own display line, and put the final answer in \\boxed{...}.',
+  'Keep trivial arithmetic to one short line — do not pad an easy question with sections.',
+  // Structure and length.
+  'Answer the question directly first, then explain only if it adds value.',
+  'Match the length to the request: brief for simple questions, structured and detailed for complex ones.',
+  'Use headings only when a longer answer genuinely has sections.',
+  'Reply in the language the user writes in, including English, Hindi and Hinglish.',
+  'When asked who created LOKY AI, say it was created by Lokesh Yadav. Do not claim he created the underlying AI model.',
 ].join(' ');
 
 function str(value, fallback = '') {
@@ -213,7 +226,7 @@ export function loadConfig(env = process.env) {
     requiresApiKey: !isLocalUrl(baseUrl),
     systemPrompt: str(env.AI_SYSTEM_PROMPT, DEFAULT_SYSTEM_PROMPT),
     temperature: Math.min(Math.max(num(env.AI_TEMPERATURE, 0.7), 0), 2),
-    maxTokens: int(env.AI_MAX_TOKENS, 2048, 16, 32000),
+    maxTokens: int(env.AI_MAX_TOKENS, 4096, 16, 32000),
     timeoutMs: int(env.AI_TIMEOUT_MS, 60000, 1000, 300000),
     keyUrl: preset.keyUrl,
     supabase: loadSupabase(env),
@@ -226,8 +239,13 @@ export function loadConfig(env = process.env) {
     limits: {
       rateLimitMax: int(env.RATE_LIMIT_MAX, 20, 1, 10000),
       rateLimitWindowMs: int(env.RATE_LIMIT_WINDOW_MS, 60000, 1000, 3600000),
-      maxInputChars: int(env.MAX_INPUT_CHARS, 24000, 1000, 200000),
-      maxMessages: int(env.MAX_MESSAGES, 40, 2, 200),
+      // A long conversation is now bounded by TOKENS (see contextTokens) rather
+      // than by a raw character count, so this ceiling is deliberately generous:
+      // it only rejects payloads that could never fit the model's window.
+      maxInputChars: int(env.MAX_INPUT_CHARS, 96000, 1000, 400000),
+      maxMessages: int(env.MAX_MESSAGES, 120, 2, 400),
+      // Token budget for the conversation window actually sent to the model.
+      contextTokens: int(env.AI_CONTEXT_TOKENS, 24000, 4000, 200000),
       // Image attachments: capped so one request can never balloon.
       maxImagesPerMessage: int(env.MAX_IMAGES_PER_MESSAGE, 4, 1, 8),
       maxImageBase64Chars: int(env.MAX_IMAGE_BASE64_CHARS, 2400000, 100000, 6000000),
