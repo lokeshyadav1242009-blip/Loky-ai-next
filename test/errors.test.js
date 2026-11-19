@@ -76,10 +76,18 @@ test('402 explains the out-of-credits case', () => {
 });
 
 test('5xx maps to a retryable outage error', () => {
-  const error = mapUpstreamError(503, { error: { message: 'overloaded' } });
-  assert.equal(error.status, 503);
-  assert.equal(error.code, 'upstream_unavailable');
-  assert.equal(error.retryable, true);
+  // An outage with no provider detail stays a generic, retryable failure.
+  const outage = mapUpstreamError(500, null);
+  assert.equal(outage.code, 'upstream_unavailable');
+  assert.equal(outage.retryable, true);
+
+  // But when the provider actually says it is overloaded, report overload
+  // instead of a generic outage: retrying really does help, and the user
+  // should be told the truth about why the answer failed.
+  const busy = mapUpstreamError(503, { error: { message: 'overloaded' } });
+  assert.equal(busy.status, 503);
+  assert.equal(busy.code, 'upstream_overloaded');
+  assert.equal(busy.retryable, true);
 });
 
 test('extractDetail digs messages out of the common payload shapes', () => {
