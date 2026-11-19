@@ -12,7 +12,10 @@ const NOW = Date.UTC(2026, 10, 20, 12, 0, 0);
 
 test('formatHistoryDate renders a stable ISO day', () => {
   assert.equal(formatHistoryDate(NOW), '2026-11-20');
-  assert.equal(formatHistoryDate('2026-11-20T12:00:00.000Z'), '2026-11-20');
+  // Epoch milliseconds are the contract (the client sends Date.now()).
+  assert.equal(formatHistoryDate(String(NOW)), '2026-11-20');
+  // A non-numeric string is not a timestamp; it must not become a fake date.
+  assert.equal(formatHistoryDate('2026-11-20T12:00:00.000Z'), '');
   assert.equal(formatHistoryDate(null), '');
   assert.equal(formatHistoryDate('not a date'), '');
 });
