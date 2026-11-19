@@ -1,4 +1,4 @@
-import { AppError, errors, mapUpstreamError } from './errors.js';
+import { AppError, errors, mapUpstreamError, describeUpstream } from './errors.js';
 
 /**
  * Provider-agnostic streaming client.
@@ -57,10 +57,7 @@ export function buildPayload(config, messages, options = {}) {
 
   if (style === 'gemini') {
     return {
-      contents: messages.map((m) => ({
-        role: m.role === 'assistant' ? 'model' : 'user',
-        parts: buildGeminiParts(m),
-      })),
+      contents: sanitizeGeminiContents(messages),
       ...(systemPrompt || systemExtra
         ? {
             systemInstruction: {
@@ -71,10 +68,7 @@ export function buildPayload(config, messages, options = {}) {
             },
           }
         : {}),
-      generationConfig: {
-        temperature,
-        maxOutputTokens: maxTokens,
-      },
+      generationConfig: sanitizeGenerationConfig(temperature, maxTokens),
     };
   }
 
@@ -110,6 +104,48 @@ export function buildGeminiParts(message) {
   }
   if (parts.length === 0) parts.push({ text: '' });
   return parts;
+}
+
+/**
+ * Normalise Gemini `contents` before sending.
+ *
+ * Gemini rejects a request whose first turn is a model turn, whose `parts` array
+ * is empty, or that repeats a role in a way it cannot merge. Trimming a long
+ * conversation to a recent window produces exactly those shapes, which used to
+ * surface as "the provider rejected the request as invalid".
+ */
+export function sanitizeGeminiContents(messages) {
+  const out = [];
+  for (const message of Array.isArray(messages) ? messages : []) {
+    const parts = buildGeminiParts(message);
+    if (!parts.length) continue;
+    const role = message?.role === 'assistant' ? 'model' : 'user';
+    const previous = out[out.length - 1];
+    if (previous && previous.role === role) {
+      // Merge consecutive same-role turns instead of sending an invalid shape.
+      previous.parts.push(...parts);
+      continue;
+    }
+    out.push({ role, parts });
+  }
+
+  while (out.length > 1 && out[0].role === 'model') out.shift();
+  if (out.length === 1 && out[0].role === 'model') {
+    out.unshift({ role: 'user', parts: [{ text: 'Continue.' }] });
+  }
+  return out;
+}
+
+/** Clamp generation parameters into the range the provider accepts. */
+export function sanitizeGenerationConfig(temperature, maxTokens) {
+  const temp = Number(temperature);
+  const tokens = Number(maxTokens);
+  return {
+    temperature: Number.isFinite(temp) ? Math.min(Math.max(temp, 0), 2) : 0.7,
+    maxOutputTokens: Number.isFinite(tokens)
+      ? Math.min(Math.max(Math.round(tokens), 1), 8192)
+      : 2048,
+  };
 }
 
 /** OpenAI-compatible content: text plus data-URL image parts when present. */
@@ -208,7 +244,7 @@ export async function* parseSSE(stream) {
  * Yields text deltas (strings) and finishes normally at end-of-stream.
  * Throws AppError with a user-safe message on failure.
  */
-export async function* streamChat(config, messages, options = {}) {
+async function* streamOnce(config, messages, options = {}, state = null) {
   const { signal } = options;
   const endpoint = buildEndpoint(config);
 
@@ -246,6 +282,7 @@ export async function* streamChat(config, messages, options = {}) {
     clearTimeout(timeout);
     if (signal) signal.removeEventListener('abort', onAbort);
     const body = await safeJson(response);
+    logUpstream('upstream_error', describeUpstream(response.status, body, config));
     throw mapUpstreamError(
       response.status,
       body,
@@ -261,15 +298,20 @@ export async function* streamChat(config, messages, options = {}) {
   }
 
   let sawContent = false;
+  let finishReason = '';
   try {
     for await (const event of parseSSE(response.body)) {
       if (event.raw === '[DONE]') break;
       if (event.data?.error) {
         throw mapUpstreamError(400, event.data, config);
       }
+      if (event.data?.candidates?.[0]?.finishReason) {
+        finishReason = event.data.candidates[0].finishReason;
+      }
       const delta = extractDelta(config.style, event.data);
       if (delta) {
         sawContent = true;
+        if (state) state.yielded = true;
         yield delta;
       }
     }
@@ -289,10 +331,113 @@ export async function* streamChat(config, messages, options = {}) {
   }
 
   if (!sawContent) {
-    throw errors.upstreamError(
-      'The AI service returned an empty answer.',
-      'The model may have refused or the provider may have changed its response format.',
+    // Distinguish "the model refused" from "the model is busy and sent nothing".
+    // The busy case is retryable; the blocked case never is.
+    const blocked = ['SAFETY', 'RECITATION', 'PROHIBITED_CONTENT', 'BLOCKLIST'].includes(
+      String(finishReason).toUpperCase(),
     );
+    if (blocked) {
+      throw new AppError(
+        502,
+        'content_blocked',
+        'The AI model declined to answer because of its safety filters.',
+        {
+          hint: 'Try rephrasing the request, or remove the part that was refused.',
+          retryable: false,
+        },
+      );
+    }
+    throw errors.upstreamOverloaded(
+      null,
+      'The AI model returned an empty answer - it may be busy right now. Please try again.',
+    );
+  }
+}
+
+/** Failures that can genuinely succeed on a second attempt. */
+const RETRYABLE_CODES = new Set([
+  'upstream_rate_limited',
+  'upstream_overloaded',
+  'upstream_unavailable',
+  'upstream_error',
+]);
+
+/** True only for transient provider failures - never for invalid requests. */
+export function isRetryableUpstream(error) {
+  if (!(error instanceof AppError)) return false;
+  if (error.retryable !== true) return false;
+  return RETRYABLE_CODES.has(error.code);
+}
+
+/** Exponential backoff with jitter, honouring a provider Retry-After hint. */
+export function backoffDelayMs(attempt, retryAfterSeconds) {
+  if (Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0) {
+    return Math.min(retryAfterSeconds * 1000, 15000);
+  }
+  const base = 700 * 2 ** Math.max(0, attempt - 1);
+  return Math.min(base + Math.floor(Math.random() * 250), 8000);
+}
+
+function sleep(ms, signal) {
+  return new Promise((resolve) => {
+    const timer = setTimeout(resolve, ms);
+    if (signal) {
+      signal.addEventListener('abort', () => {
+        clearTimeout(timer);
+        resolve();
+      }, { once: true });
+    }
+  });
+}
+
+/** Secret-free structured diagnostics for the server log. */
+export function logUpstream(event, data = {}) {
+  try {
+    console.warn(`[ai] ${event} ${JSON.stringify(data)}`);
+  } catch {
+    /* logging must never break a request */
+  }
+}
+
+/**
+ * Stream a chat completion, retrying TRANSIENT failures with exponential
+ * backoff. A retry only happens before the first token reaches the client, so
+ * the browser can never receive duplicated partial text.
+ */
+export async function* streamChat(config, messages, options = {}) {
+  const maxAttempts = Math.max(
+    1,
+    Math.min(Number(options.maxAttempts ?? config.maxAttempts ?? 3) || 3, 4),
+  );
+
+  for (let attempt = 1; ; attempt += 1) {
+    const state = { yielded: false };
+    try {
+      for await (const delta of streamOnce(config, messages, options, state)) {
+        state.yielded = true;
+        yield delta;
+      }
+      return;
+    } catch (error) {
+      const canRetry =
+        !state.yielded &&
+        attempt < maxAttempts &&
+        !options.signal?.aborted &&
+        isRetryableUpstream(error);
+
+      if (!canRetry) throw error;
+
+      const wait = backoffDelayMs(attempt, error.retryAfter);
+      logUpstream('retrying', {
+        attempt,
+        maxAttempts,
+        waitMs: wait,
+        code: error.code,
+        model: config.model ?? null,
+      });
+      await sleep(wait, options.signal);
+      if (options.signal?.aborted) return;
+    }
   }
 }
 
