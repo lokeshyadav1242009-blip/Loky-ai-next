@@ -15,6 +15,9 @@ export const MAX_STORED_CONVERSATIONS = 50;
 export const MAX_TITLE_LENGTH = 80;
 export const DEFAULT_TITLE = 'New chat';
 
+/** Cap on a stored rolling summary, matching the server (server/context.js). */
+export const MAX_SUMMARY_CHARS = 4800;
+
 /**
  * Total characters of image data kept in localStorage (~4.5 MB, well under the
  * usual 5 MB origin quota). Older images are dropped from storage first so the
@@ -183,13 +186,35 @@ export function normalizeConversations(raw) {
           : { role: m.role, content: m.content, error: Boolean(m.error) };
       });
 
-    out.push({
+    const record = {
       id: item.id,
       title: sanitizeTitle(item.title, 'Untitled chat'),
       createdAt,
       updatedAt,
       messages,
-    });
+    };
+
+    // Infinite-chat metadata. It is stored BESIDE `messages`, never inside it,
+    // so a rolling summary can never be replayed as a real turn or corrupt the
+    // conversation the user sees.
+    if (typeof item.summary === 'string' && item.summary.trim()) {
+      record.summary = item.summary.trim().slice(0, MAX_SUMMARY_CHARS);
+    }
+    const summaryUpTo = Number(item.summaryUpTo);
+    if (Number.isFinite(summaryUpTo) && summaryUpTo > 0) {
+      record.summaryUpTo = Math.min(Math.floor(summaryUpTo), messages.length);
+    }
+    if (typeof item.continuedFrom === 'string' && item.continuedFrom) {
+      record.continuedFrom = item.continuedFrom;
+    }
+    if (typeof item.continuedFromTitle === 'string' && item.continuedFromTitle) {
+      record.continuedFromTitle = sanitizeTitle(item.continuedFromTitle, 'Untitled chat');
+    }
+    if (typeof item.continuedTo === 'string' && item.continuedTo) {
+      record.continuedTo = item.continuedTo;
+    }
+
+    out.push(record);
   }
 
   return out;
@@ -240,6 +265,15 @@ export function serializeConversations(conversations, activeId = null) {
             return images.length ? { ...base, images } : base;
           })
         : [],
+      ...(typeof c.summary === 'string' && c.summary.trim()
+        ? { summary: c.summary.trim().slice(0, MAX_SUMMARY_CHARS) }
+        : {}),
+      ...(Number.isFinite(Number(c.summaryUpTo)) && Number(c.summaryUpTo) > 0
+        ? { summaryUpTo: Math.floor(Number(c.summaryUpTo)) }
+        : {}),
+      ...(c.continuedFrom ? { continuedFrom: c.continuedFrom } : {}),
+      ...(c.continuedFromTitle ? { continuedFromTitle: c.continuedFromTitle } : {}),
+      ...(c.continuedTo ? { continuedTo: c.continuedTo } : {}),
     })),
   });
 }
