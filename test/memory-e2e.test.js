@@ -139,7 +139,9 @@ function fakeSupabase({ extended = true } = {}) {
       tables.memories = tables.memories.filter(
         (entry) => !(entry.id === id && entry.user_id === userId),
       );
-      return new Response('', { status: 204 });
+      // A null body: undici rejects a 204 response that carries one, which is
+      // exactly the reply real PostgREST sends for a DELETE.
+      return new Response(null, { status: 204 });
     }
 
     return json({ message: 'unsupported' }, 405);
@@ -180,7 +182,10 @@ const jeeReply = JSON.stringify({
   ],
 });
 
-function extract(supabase, { token = 'token-a', reply = jeeReply, messages = jeeTurn.messages } = {}) {
+function extract(
+  supabase,
+  { token = 'token-a', reply = jeeReply, messages = jeeTurn.messages, storeFactory } = {},
+) {
   return runMemoryExtraction({
     config,
     token,
@@ -189,6 +194,7 @@ function extract(supabase, { token = 'token-a', reply = jeeReply, messages = jee
     conversationId: jeeTurn.conversationId,
     settings,
     complete: async () => reply,
+    ...(storeFactory ? { storeFactory } : {}),
     log: () => {},
   });
 }
@@ -250,7 +256,8 @@ test('an invalid session is refused instead of falling back to anonymous access'
   const store = createMemoryStore({ ...supabase.creds, token: 'expired-token' });
 
   await assert.rejects(() => store.list(), (error) => error.code === 'auth_required');
-  await assert.rejects(
+  // A store cannot be constructed without a session at all.
+  assert.throws(
     () => createMemoryStore({ ...supabase.creds, token: '' }),
     (error) => error.code === 'auth_required',
   );
@@ -315,13 +322,26 @@ test('the extended schema stores importance, confidence and the source chat', as
 test('the live 0004 schema keeps working: missing columns fall back, nothing is lost', async () => {
   const supabase = fakeSupabase({ extended: false });
   const store = createMemoryStore({ ...supabase.creds, token: 'token-a' });
+  assert.equal(store.supportsExtendedColumns(), true, 'no query has run yet');
 
-  const learned = await extract(supabase);
+  // Exercise the very store the app would use, so the sticky downgrade on it is
+  // what gets asserted below.
+  const learned = await extract(supabase, { storeFactory: () => store });
   assert.equal(learned.saved, 5, 'the fallback path must still save every fact');
   assert.equal(store.supportsExtendedColumns(), false, 'the store should remember the downgrade');
   assert.ok(
     supabase.calls.some((call) => /importance/.test(call.select)),
     'the extended select was attempted before falling back',
+  );
+
+  // Later reads must not keep retrying the rejected column set.
+  const extendedAttempts = supabase.calls.filter((call) => /importance/.test(call.select)).length;
+  await store.list();
+  await store.list();
+  assert.equal(
+    supabase.calls.filter((call) => /importance/.test(call.select)).length,
+    extendedAttempts,
+    'the downgrade is sticky, not retried per request',
   );
 
   const context = await store.contextFor('What should I study today?');

@@ -145,10 +145,20 @@ test('parseExtraction de-duplicates and caps the batch by importance', () => {
 test('an identical fact is skipped, not duplicated', () => {
   const plan = planMemoryWrites(
     [candidate('The user is a Class 11 JEE aspirant.')],
-    [{ id: 'm1', content: 'the user is a class 11 jee aspirant', category: 'study' }],
+    [{ id: 'm1', content: 'The user is a Class 11 JEE aspirant.', category: 'study' }],
   );
   assert.equal(plan.adds.length, 0);
   assert.equal(plan.skipped[0].reason, 'duplicate');
+});
+
+test('a punctuation-only rewording rewrites the row instead of adding one', () => {
+  const plan = planMemoryWrites(
+    [candidate('The user is a Class 11 JEE aspirant.')],
+    [{ id: 'm1', content: 'the user is a class 11 jee aspirant', category: 'study' }],
+  );
+  assert.equal(plan.adds.length, 0, 'never a second row for the same fact');
+  assert.equal(plan.updates.length, 1);
+  assert.equal(plan.updates[0].id, 'm1');
 });
 
 test('a changed preference supersedes the existing row in place', () => {
