@@ -207,6 +207,14 @@
   color: var(--text, #e6f2ec);
 }
 
+/* The section ships with the `hidden` attribute and `.memory` sets an author
+   `display`, which would otherwise beat the UA `[hidden]` rule and paint the
+   Memory page underneath the chat. Keep the attribute authoritative so the
+   section is visible only when app.js actually opens it. */
+.memory[hidden] {
+  display: none;
+}
+
 .memory[hidden] {
   display: none;
 }

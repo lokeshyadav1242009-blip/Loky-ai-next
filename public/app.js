@@ -44,6 +44,7 @@ import {
 } from './chat-images.js';
 import { extractMath, isLongAnswer, mathTokenPattern } from './rich-text.js';
 import { initMemoryUI, openMemory, resetMemory } from './memory-ui.js';
+import { sectionVisibility } from './section-visibility.js';
 
 
 const HEALTH_REFRESH_MS = 60000;
@@ -84,6 +85,7 @@ const el = {
   navMessages: document.getElementById('navMessages'),
   appShell: document.getElementById('appShell'),
   messenger: document.getElementById('messenger'),
+  memory: document.getElementById('memory'),
 };
 
 /* -------------------------------------------------------------------------- */
@@ -1756,7 +1758,15 @@ function setSection(section) {
   if (showMessages) openLayer('messages', () => setSection('assistant'));
   else closeLayer('messages');
 
-  el.appShell.hidden = showMessages || showMemory;
+  // Every screen's visibility is owned here and nowhere else. The Memory
+  // section used to keep its `hidden` attribute for the life of the page, so
+  // whether it appeared at all depended on upgrade.css loading in time: without
+  // `.memory { display: block }` the UA `[hidden]` rule won, #appShell was
+  // already hidden, and the user got a blank black screen. Toggling both sides
+  // explicitly removes that dependency entirely.
+  const visible = sectionVisibility(next);
+  el.appShell.hidden = !visible.assistant;
+  if (el.memory) el.memory.hidden = !visible.memory;
   // The legacy localStorage messenger is retired: the Messages section now
   // renders LOKY CONNECT, which reads real Supabase conversations. The old node
   // stays in the DOM (hidden) so nothing that references it breaks.
