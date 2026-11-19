@@ -120,8 +120,12 @@ test('two separate accounts each write only their own row', async () => {
   setup(respond, USER_ID);
   const alice = await saveUsername('alice_one');
 
+  // Each browser session loads its own copy of the module, so each keeps its
+  // own cached session. Reusing this instance would keep alice's token and
+  // would not prove the second account writes its own row.
   setup(respond, OTHER_ID);
-  const bob = await saveUsername('bob_two');
+  const secondSession = await import('../public/supabase-client.js?account=other');
+  const bob = await secondSession.saveUsername('bob_two');
 
   assert.equal(alice.username, 'alice_one');
   assert.equal(bob.username, 'bob_two');
@@ -241,8 +245,12 @@ test('a signed-out visitor cannot write a profile', async () => {
   requests = [];
   handler = () => json([]);
 
+  // A fresh instance has no cached session, which is what a real signed-out
+  // page load looks like.
+  const signedOut = await import('../public/supabase-client.js?signed-out');
+
   await assert.rejects(
-    () => saveUsername('alice'),
+    () => signedOut.saveUsername('alice'),
     (error) => {
       assert.equal(error.code, 'signed_out');
       return true;
