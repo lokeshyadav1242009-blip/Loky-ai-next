@@ -829,3 +829,44 @@
     transition: none;
   }
 }
+
+/* --- Infinite chat: continuation banner -------------------------------- */
+.chat-continuation {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  max-width: 640px;
+  margin: 4px auto 14px;
+  padding: 10px 14px;
+  border: 1px solid rgba(25, 230, 140, 0.28);
+  border-radius: 14px;
+  background: rgba(16, 185, 129, 0.08);
+  color: #a7f3d0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.chat-continuation__link {
+  appearance: none;
+  padding: 5px 11px;
+  border: 1px solid rgba(25, 230, 140, 0.45);
+  border-radius: 999px;
+  background: rgba(25, 230, 140, 0.12);
+  color: #19e68c;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.18s ease, transform 0.18s ease;
+}
+
+.chat-continuation__link:hover { background: rgba(25, 230, 140, 0.2); }
+.chat-continuation__link:active { transform: scale(0.97); }
+.chat-continuation__link:focus-visible { outline: 2px solid #34d399; outline-offset: 2px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-continuation__link { transition: none; }
+}
