@@ -556,7 +556,28 @@ async function rest(path, { method = 'GET', body, prefer, retry = true } = {}) {
     if (code === '23514') {
       throw new SupabaseError('invalid_username', 'That username is not allowed.', response.status);
     }
+    // 42501 = insufficient_privilege. Postgres raises that same code for a
+    // missing column grant, an RLS denial and our own guard triggers, so name
+    // the real cause instead of one catch-all "not allowed" for all three.
     if (code === '42501' || response.status === 403) {
+      const detail = String(message || '');
+      if (detail.includes('privilege_change_not_allowed')) {
+        throw new SupabaseError(
+          'forbidden',
+          'Only an administrator can change account privileges.',
+          response.status
+        );
+      }
+      if (/row.level.security/i.test(detail)) {
+        throw new SupabaseError('forbidden', 'You can only change your own profile.', response.status);
+      }
+      if (/permission denied/i.test(detail)) {
+        throw new SupabaseError(
+          'forbidden',
+          'The database refused this change (permission denied). Please try again, and contact support if it keeps happening.',
+          response.status
+        );
+      }
       throw new SupabaseError('forbidden', 'You are not allowed to do that.', response.status);
     }
     if (response.status === 404 && code === 'PGRST205') {
@@ -603,26 +624,56 @@ export async function getMyProfile() {
  * do not pre-check by querying other profiles, because a broad profile SELECT
  * is intentionally not permitted. A collision surfaces as code
  * 'username_taken' from the 23505 handler above.
+ *
+ * This deliberately does NOT use a PostgREST upsert. `on_conflict` +
+ * `resolution=merge-duplicates` compiles to `INSERT ... ON CONFLICT (id) DO
+ * UPDATE SET id = EXCLUDED.id, ...`, and migration 0002 revokes table-level
+ * UPDATE while granting column-level UPDATE on username/display_name/
+ * avatar_seed only. Writing `id` therefore raises 42501 (permission denied)
+ * for every account that already has a profile row. A PATCH names only the
+ * granted columns, and the INSERT fallback covers an account whose row is
+ * missing (the signup trigger did not run).
  */
 export async function saveUsername(rawUsername, displayName) {
   const user = currentUser();
   if (!user) throw new SupabaseError('signed_out', 'Please sign in first.', 401);
 
   const username = normalizeUsername(rawUsername);
-  const row = {
-    id: user.id,
+  const fields = {
     username,
     display_name: typeof displayName === 'string' && displayName.trim() ? displayName.trim().slice(0, 60) : null,
     avatar_seed: username,
   };
 
-  const rows = await rest('profiles?on_conflict=id&select=id,username,display_name,avatar_seed', {
-    method: 'POST',
-    body: row,
-    prefer: 'resolution=merge-duplicates,return=representation',
-  });
+  // 1. Update the caller's own row. The filter is always our own auth uid, so
+  // RLS ('profiles: update own', id = auth.uid()) still decides the outcome;
+  // this module never widens what the database allows.
+  const updated = await rest(
+    `profiles?id=eq.${encodeURIComponent(user.id)}&select=id,username,display_name,avatar_seed`,
+    { method: 'PATCH', body: fields, prefer: 'return=representation' }
+  );
+  if (Array.isArray(updated) && updated[0]) return updated[0];
 
-  return Array.isArray(rows) && rows[0] ? rows[0] : row;
+  // 2. Nothing matched. Either the account has no profile row yet, or the row
+  // exists and the database refused the write (PostgREST answers an RLS denial
+  // with an empty result, not an error). Ask for our own row — permitted by the
+  // SELECT policy — to tell those apart instead of reporting a false
+  // "username already taken" from the INSERT below.
+  const existing = await getMyProfile();
+  if (existing) {
+    throw new SupabaseError(
+      'forbidden',
+      'Your profile could not be updated because the database refused the change. Please try again, and contact support if it keeps happening.',
+      403
+    );
+  }
+
+  const created = await rest('profiles?select=id,username,display_name,avatar_seed', {
+    method: 'POST',
+    body: { id: user.id, ...fields },
+    prefer: 'return=representation',
+  });
+  return Array.isArray(created) && created[0] ? created[0] : { id: user.id, ...fields };
 }
 
 /* --------------------------------- people --------------------------------- */
