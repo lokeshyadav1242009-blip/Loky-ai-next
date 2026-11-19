@@ -153,7 +153,7 @@ test('password validation enforces a minimum length locally', () => {
   assert.equal(validatePassword('').ok, false);
 });
 
-test('signup form requires display name, username, email and password together', () => {
+test('the fallback username step still validates username, email and password together', () => {
   const good = validateSignupForm({
     displayName: '  Lokesh  ',
     username: '  @Lokesh_Dev ',
@@ -268,10 +268,15 @@ test('the shipped page gates the app behind a full-screen auth screen', async ()
     'authPassword',
     'authSignInBtn',
     'authGoSignUp',
-    'authDisplayName',
-    'authUsernameNew',
     'authEmailNew',
     'authPasswordNew',
+    'authPasswordNewToggle',
+    'authPasswordNewReq',
+    'authPasswordToggle',
+    'authOauth',
+    'authOauthSignup',
+    'authGoogleBtn',
+    'authGoogleBtnSignIn',
     'authSignUpBtn',
     'authGoSignIn',
     'authUsernameInput',
