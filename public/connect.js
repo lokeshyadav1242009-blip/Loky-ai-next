@@ -40,6 +40,14 @@ import {
 } from './supabase-client.js';
 
 import {
+  normalizeSearchTerm,
+  isSearchable,
+  describeSearchState,
+  friendStateLabel,
+  excludeSelf,
+} from './search-utils.js';
+
+import {
   CONNECT_TABS,
   REACTIONS,
   normalizeTab,
@@ -86,6 +94,9 @@ const state = {
   notifications: [],
   results: [],
   search: '',
+  searchTerm: '',
+  searching: false,
+  searchError: '',
   active: null,
   messages: [],
   attachment: null,
@@ -509,12 +520,14 @@ function requestRow(req, actions) {
 function renderResults() {
   if (!dom.discoList) return;
   clear(dom.discoList);
-  dom.discoEmpty.hidden = state.results.length > 0;
-  if (!state.results.length) {
-    dom.discoEmpty.textContent = state.search
-      ? 'Nobody matched that username.'
-      : 'Search a username to find people.';
-  }
+  const view = describeSearchState({
+    term: state.searchTerm,
+    count: state.results.length,
+    searching: state.searching,
+    error: state.searchError,
+  });
+  dom.discoEmpty.hidden = view.kind === 'results';
+  dom.discoEmpty.textContent = view.message;
 
   for (const person of state.results) {
     const li = h('li', 'connect-result');
@@ -522,7 +535,10 @@ function renderResults() {
     body.append(avatarNode(person.username, person.username, person.avatar_seed, 'md'));
     const text = h('div', 'connect-req__text');
     text.append(h('strong', null, person.display_name || `@${person.username}`));
-    text.append(h('span', 'connect-req__note', `@${person.username}`));
+    const stateLabel = friendStateLabel(person.friend_state);
+    text.append(
+      h('span', 'connect-req__note', stateLabel ? `@${person.username} · ${stateLabel}` : `@${person.username}`)
+    );
     body.append(text);
 
     const view = friendAction(person.friend_state, Boolean(state.me && person.id === state.me.id));
@@ -648,33 +664,49 @@ async function cancelRequest(req, button) {
 }
 
 async function runSearch() {
-  const term = (dom.discoInput.value || '').trim().replace(/^@/, '');
-  state.search = term;
-  if (term.length < 2) {
+  const term = normalizeSearchTerm(dom.discoInput.value || '');
+  // Discover search is kept separate from the chat-list filter (state.search),
+  // otherwise searching a person also silently filters the conversation list.
+  state.searchTerm = term;
+  state.searchError = '';
+
+  if (!isSearchable(term)) {
+    state.results = [];
+    state.searching = false;
+    renderResults();
     say('Type at least two characters of a username.', 'warn');
     return;
   }
-  dom.discoEmpty.hidden = false;
-  dom.discoEmpty.textContent = 'Searching…';
+
+  state.results = [];
+  state.searching = true;
+  renderResults();
   clear(dom.discoList);
+
   try {
-    const people = await searchUsers(term);
+    const people = excludeSelf(await searchUsers(term), state.me && state.me.id);
     const withState = [];
     for (const person of people) {
-      let status = 'none';
-      try {
-        status = await friendStatus(person.id);
-      } catch (error) {
-        status = 'none';
+      if (!person || !person.id) continue;
+      // The RPC returns friend_state once migration 0006 is applied; until
+      // then fall back to the per-user lookup so behaviour never regresses.
+      let status = person.friend_state || 'none';
+      if (!person.friend_state) {
+        try {
+          status = await friendStatus(person.id);
+        } catch (error) {
+          status = 'none';
+        }
       }
       withState.push({ ...person, friend_state: status });
     }
     state.results = withState;
-    renderResults();
   } catch (error) {
     state.results = [];
+    state.searchError = error && error.message ? error.message : 'Search failed.';
+  } finally {
+    state.searching = false;
     renderResults();
-    dom.discoEmpty.textContent = error && error.message ? error.message : 'Search failed.';
   }
 }
 
