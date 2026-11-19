@@ -45,7 +45,8 @@ test('the AI request sends the Supabase access token as a Bearer header', () => 
   assert.match(appJs, /import \{[^}]*getAccessToken[^}]*\} from '\.\/supabase-client\.js'/);
   assert.match(appJs, /headers\.Authorization = `Bearer \$\{token\}`/);
   // The request must be built through the helper that adds the header.
-  assert.match(appJs, /chatRequest\(await currentAccessToken\(\), messages, signal, summary\)/);
+  // The same helper also carries the retrieved earlier conversations (history).
+  assert.match(appJs, /chatRequest\(await currentAccessToken\(\), messages, signal, summary(?:, history)?\)/);
 });
 
 test('an unusable stored session does not block the request itself', () => {
@@ -59,7 +60,7 @@ test('an unusable stored session does not block the request itself', () => {
 test('a 401 refreshes the session once and retries before giving up', () => {
   assert.match(appJs, /response\.status === 401/);
   assert.match(appJs, /refreshAccessToken\(\)/);
-  assert.match(appJs, /response = await chatRequest\(refreshed, messages, signal, summary\)/);
+  assert.match(appJs, /response = await chatRequest\(refreshed, messages, signal, summary(?:, history)?\)/);
   assert.match(supabaseJs, /export async function refreshAccessToken\(\)/);
 });
 
