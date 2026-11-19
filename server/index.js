@@ -21,6 +21,7 @@ import { validateChatRequest } from './validate.js';
 import { createRateLimiter, rateLimitMiddleware } from './rateLimit.js';
 import { createAdminRouter } from './admin.js';
 import { requireAuth } from './auth.js';
+import { historyBlock, normalizeHistoryInput } from './history.js';
 import { isMaintenanceOn, maintenanceSnapshot } from './maintenance.js';
 import { parseSuperAdminIds, SUPER_ADMIN_ENV } from './superadmin.js';
 import { isAssetPath } from './asset-path.js';
@@ -278,7 +279,13 @@ app.post('/api/chat', rateLimitMiddleware(limiter), requireAuth, async (req, res
     windowed.trimmed && !clientSummary
       ? 'Earlier messages were shortened for length. Continue from the recent messages without restarting the discussion.'
       : '';
-  systemExtra = [summaryBlock(clientSummary), systemExtra, trimNote].filter(Boolean).join('\n\n');
+  // Earlier conversations belong to the browser, so they arrive with the
+  // request. Without this the model only ever saw the current chat and told
+  // users their previous chats were not saved.
+  const priorHistory = historyBlock(normalizeHistoryInput(req.body?.history));
+  systemExtra = [summaryBlock(clientSummary), systemExtra, priorHistory, trimNote]
+    .filter(Boolean)
+    .join('\n\n');
 
   // 4. Open the SSE stream and pipe tokens through.
   res.writeHead(200, {

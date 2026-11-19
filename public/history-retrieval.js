@@ -52,6 +52,10 @@ const HISTORY_ANCHORS = [
   /yesterday/,
   /saved (?:chat|conversation)/,
   /chat history/,
+  /continue where/,
+  /where we left/,
+  /jahan chhoda/,
+  /wahi se/,
   /पिछल/,
   /पहले/,
   /कल/,
@@ -60,7 +64,6 @@ const HISTORY_ANCHORS = [
 /** Past-tense markers: "kya kiya tha", "what did we discuss". */
 const PAST_MARKERS = [
   /\btha\b/,
-  /\bthe\b/,
   /\bkiye\b/,
   /\bkiya\b/,
   /\bpooch?a\b/,
@@ -241,10 +244,21 @@ export function buildHistoryPayload(conversations, { activeId = null, query = ''
 
   if (!intent.isHistory) return payload;
 
+  // Attach only the conversations that actually answer the question. When the
+  // question names nothing in particular ("pichle chat me jo que diye the"),
+  // the most recent chat is what the user means; shipping six transcripts would
+  // just make the model answer "which one?" every single time.
+  const terms = contentTerms(query);
+  const best = ranked[0]?.score ?? 0;
+  const hasEvidence = terms.size > 0 && best >= 1;
+  const selected = hasEvidence
+    ? ranked.filter((entry) => entry.score >= best * 0.7)
+    : ranked.slice(0, 1);
+
   let messageBudget = HISTORY_EXCERPT_MESSAGES;
   let charBudget = HISTORY_BLOCK_CHARS;
 
-  for (const entry of ranked.slice(0, HISTORY_EXCERPT_CONVERSATIONS)) {
+  for (const entry of selected.slice(0, HISTORY_EXCERPT_CONVERSATIONS)) {
     if (messageBudget <= 0 || charBudget <= 0) break;
     const messages = [];
     for (const message of entry.messages) {

@@ -1077,7 +1077,9 @@ async function currentAccessToken() {
   }
 }
 
-function chatRequest(token, messages, signal, summary) {
+import { buildHistoryPayload } from './history-retrieval.js';
+
+function chatRequest(token, messages, signal, summary, history) {
   const headers = { 'Content-Type': 'application/json', Accept: 'text/event-stream' };
   // Without this header the server sees an anonymous caller and answers
   // auth_required, which is the "Sign in to use this feature." failure.
@@ -1087,7 +1089,13 @@ function chatRequest(token, messages, signal, summary) {
     headers,
     // The rolling summary rides BESIDE `messages`: it is context for the
     // model, never a turn the user actually wrote.
-    body: JSON.stringify(summary ? { messages, summary } : { messages }),
+    // `history` rides beside the turns: earlier conversations from this browser,
+    // so the model can answer questions about chats it cannot otherwise see.
+    body: JSON.stringify({
+      messages,
+      ...(summary ? { summary } : {}),
+      ...(history && (history.index?.length || history.excerpts?.length) ? { history } : {}),
+    }),
     signal,
   });
 }
@@ -1105,10 +1113,10 @@ function networkFailure(signal) {
  * POST the conversation and stream the reply.
  * @returns {Promise<{text: string, aborted: boolean}>}
  */
-async function streamChat(messages, { onDelta, onMeta, signal, summary }) {
+async function streamChat(messages, { onDelta, onMeta, signal, summary, history }) {
   let response;
   try {
-    response = await chatRequest(await currentAccessToken(), messages, signal, summary);
+    response = await chatRequest(await currentAccessToken(), messages, signal, summary, history);
   } catch (error) {
     if (signal?.aborted) return { text: '', aborted: true };
     throw networkFailure(signal);
@@ -1127,7 +1135,7 @@ async function streamChat(messages, { onDelta, onMeta, signal, summary }) {
 
     if (refreshed) {
       try {
-        response = await chatRequest(refreshed, messages, signal, summary);
+        response = await chatRequest(refreshed, messages, signal, summary, history);
       } catch (error) {
         if (signal?.aborted) return { text: '', aborted: true };
         throw networkFailure(signal);
@@ -1245,7 +1253,11 @@ function clearTyping() {
 
 function setStreamingUI(streaming) {
   state.streaming = streaming;
-  if (!streaming) clearTyping();
+  if (!streaming) {
+    clearTyping();
+    // Safety net: no caret may outlive the stream that created it.
+    document.querySelectorAll('#messages .caret').forEach((node) => node.remove());
+  }
   els_setDisabled(streaming);
   el.send.classList.toggle('is-streaming', streaming);
   el.send.setAttribute('aria-label', streaming ? 'Stop generating' : 'Send message');
@@ -1560,13 +1572,18 @@ async function requestReply(conversation) {
   let renderQueued = false;
   let latest = '';
   let lastPainted = null;
+  // Once the reply settles, no frame may paint again. A frame queued by the last
+  // token used to run AFTER the final render and re-append the caret, which is
+  // exactly why the blinking cursor stayed on screen after the answer finished.
+  let finished = false;
 
   const paint = () => {
-    if (renderQueued || latest === lastPainted) return;
+    if (finished || renderQueued || latest === lastPainted) return;
     lastPainted = latest;
     renderQueued = true;
     requestAnimationFrame(() => {
       renderQueued = false;
+      if (finished) return;
       renderRich(md, latest, { streaming: true });
       const caret = document.createElement('span');
       caret.className = 'caret';
@@ -1575,16 +1592,26 @@ async function requestReply(conversation) {
     });
   };
 
+  // The chat list lives in this browser, so the server cannot see it. Send the
+  // user's own earlier conversations with the question: a compact index always,
+  // plus real excerpts when they are asking about a previous chat.
+  const history = buildHistoryPayload(state.conversations, {
+    activeId: conversation.id,
+    query: [...conversation.messages].reverse().find((m) => m.role === 'user')?.content ?? '',
+  });
+
   try {
     const result = await streamChat(messages, {
       signal: controller.signal,
       summary: conversation.summary ?? '',
+      history,
       onDelta: (text) => {
         latest = text;
         paint();
       },
     });
 
+    finished = true;
     latest = result.text;
 
     if (result.aborted && !latest) {
@@ -1676,7 +1703,10 @@ async function requestReply(conversation) {
     // in the top bar mirrors it for clarity.
     setStatus('error');
   } finally {
+    finished = true;
     state.abortController = null;
+    // The caret belongs to the streaming state and dies with it.
+    md.querySelectorAll('.caret').forEach((node) => node.remove());
     setStreamingUI(false);
 
     // Desktop only: never steal focus after the answer finishes. On phones
