@@ -12,6 +12,10 @@
 
 export const HISTORY_LIMITS = {
   indexEntries: 12,
+  facts: 12,
+  factLabelChars: 40,
+  factValueChars: 120,
+  factTextChars: 200,
   excerpts: 6,
   messages: 40,
   messageChars: 480,
@@ -47,7 +51,7 @@ export function formatHistoryDate(value) {
  * Never throws: a malformed payload must not break an otherwise valid chat.
  */
 export function normalizeHistoryInput(raw, limits = HISTORY_LIMITS) {
-  const empty = { index: [], excerpts: [], ambiguous: false, intent: 'none', query: '' };
+  const empty = { index: [], facts: [], excerpts: [], ambiguous: false, intent: 'none', query: '' };
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return empty;
 
   const index = [];
@@ -59,6 +63,25 @@ export function normalizeHistoryInput(raw, limits = HISTORY_LIMITS) {
       title,
       updatedAt: clampNumber(item.updatedAt),
       messageCount: Math.min(9999, Math.round(clampNumber(item.messageCount))),
+    });
+  }
+
+  // Structured facts extracted in the browser from the user's own messages.
+  // Label/value only — evidence to answer from, never instructions to follow.
+  const facts = [];
+  for (const item of Array.isArray(raw.facts) ? raw.facts.slice(0, limits.facts) : []) {
+    if (!item || typeof item !== 'object') continue;
+    const label = clampText(item.label, limits.factLabelChars);
+    const value = clampText(item.value, limits.factValueChars);
+    if (!label || !value) continue;
+    facts.push({
+      kind: clampText(item.kind, 20) || 'fact',
+      label,
+      value,
+      text: clampText(item.text, limits.factTextChars),
+      conversationTitle: clampText(item.conversationTitle, limits.titleChars),
+      updatedAt: clampNumber(item.updatedAt),
+      messageIndex: Math.min(9999, Math.round(clampNumber(item.messageIndex))),
     });
   }
 
@@ -91,6 +114,7 @@ export function normalizeHistoryInput(raw, limits = HISTORY_LIMITS) {
 
   return {
     index,
+    facts,
     excerpts,
     ambiguous: Boolean(raw.ambiguous) && excerpts.length > 1,
     intent: typeof raw.intent === 'string' ? raw.intent.slice(0, 24) : 'none',
@@ -100,11 +124,14 @@ export function normalizeHistoryInput(raw, limits = HISTORY_LIMITS) {
 
 const RULES = [
   'RULES FOR USING THIS (follow exactly):',
+  '- Priority when answering: (1) the current conversation, (2) the facts about the user above, (3) the message excerpts above, (4) earlier summaries. If two sources disagree, follow the most recent reliable statement.',
   "- The user's earlier conversations ARE saved and are shown above. Never say you cannot see, do not have access to, or do not save previous chats.",
-  '- The messages above are the user\'s real words. Quote their actual wording and keep their original order. Never invent questions, answers, code, formulas or dates.',
+  '- If the user asks about themselves (their class, goals, projects, preferences) and a fact above answers it, answer directly and naturally, as if you simply remember it. Do not say the information is unavailable.',
+  "- The messages above are the user's real words. Quote their actual wording and keep their original order. Never invent questions, answers, code, formulas or dates.",
+  '- Use these facts only when they are relevant to the question. Do not recite the whole list, and do not keep announcing that you have memory.',
   '- If asked for earlier questions, list the real ones in order. Add the original answers when asked, or when they are needed to make sense of a question.',
   '- If several conversations are listed and the user did not name one, say which ones are available and ask which they mean before listing everything.',
-  '- If the requested detail is not in these excerpts, say what IS available (titles/dates above) and ask the user to open that chat. Do not guess or fabricate.',
+  '- Only when neither the facts nor the excerpts contain the detail should you say you do not have it — and then ask the user instead of guessing.',
   '- Do not claim a chat does not exist when it appears in the list above.',
 ];
 
@@ -117,8 +144,9 @@ export function historyBlock(history, limits = HISTORY_LIMITS) {
   if (!data) return '';
 
   const index = Array.isArray(data.index) ? data.index : [];
+  const facts = Array.isArray(data.facts) ? data.facts : [];
   const excerpts = Array.isArray(data.excerpts) ? data.excerpts : [];
-  if (index.length === 0 && excerpts.length === 0) return '';
+  if (index.length === 0 && facts.length === 0 && excerpts.length === 0) return '';
 
   const parts = [];
 
@@ -131,6 +159,19 @@ export function historyBlock(history, limits = HISTORY_LIMITS) {
     });
     parts.push(
       "THE USER'S SAVED CONVERSATIONS (from their own device — these chats exist):",
+      lines.join('\n'),
+    );
+  }
+
+  // Facts come BEFORE excerpts: if the block is ever truncated, the one-line
+  // answers ("Class / grade: Class 11") must survive.
+  if (facts.length > 0) {
+    const lines = facts.map((fact) => {
+      const source = fact.conversationTitle ? ` — from "${fact.conversationTitle}"` : '';
+      return `- ${fact.label}: ${fact.value}${source}`;
+    });
+    parts.push(
+      "WHAT YOU ALREADY KNOW ABOUT THIS USER (facts taken from their own earlier messages):",
       lines.join('\n'),
     );
   }
@@ -148,7 +189,7 @@ export function historyBlock(history, limits = HISTORY_LIMITS) {
       'REAL EXCERPTS FROM THOSE EARLIER CONVERSATIONS (verbatim, newest first):',
       sections.join('\n\n'),
     );
-  } else {
+  } else if (facts.length === 0) {
     parts.push(
       'Only the titles were retrieved for this question. Do not claim the chats are unavailable: name the relevant titles and ask which one the user means.',
     );
