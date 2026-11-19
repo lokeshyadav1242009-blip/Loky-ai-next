@@ -265,6 +265,115 @@ function byRecency(a, b) {
 }
 
 /* -------------------------------------------------------------------------- */
+/* Cross-chat context selection                                               */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * How many "always relevant" memories may ride along with every request.
+ *
+ * A brand-new chat often asks something vague ("what should I study today?")
+ * that shares no words with the note that matters ("Class 11 JEE aspirant").
+ * Pure keyword matching would miss it, which is exactly the failure this
+ * product must not have — so a few durable notes are included unconditionally.
+ * Three is enough for identity/goal facts and small enough to stay cheap.
+ */
+export const MAX_BASELINE_MEMORIES = 3;
+
+/**
+ * Effective importance of a memory, 0..1.
+ *
+ * Rows written before the importance column existed have no value, so the
+ * pinned flag and the 0.5 default keep older data ranked sensibly instead of
+ * sorting every legacy note as unimportant.
+ */
+export function memoryImportance(memory) {
+  const raw = Number(memory?.importance);
+  if (Number.isFinite(raw)) return Math.min(1, Math.max(0, raw));
+  return memory?.pinned ? 0.9 : 0.5;
+}
+
+/** Durable-first order: pinned, then important, then most recently updated. */
+export function durableRank(a, b) {
+  return (
+    Number(Boolean(b?.pinned)) - Number(Boolean(a?.pinned)) ||
+    memoryImportance(b) - memoryImportance(a) ||
+    compareRecency(a, b)
+  );
+}
+
+/**
+ * Token-overlap similarity between two strings, 0..1 (Jaccard).
+ *
+ * Used to notice that "I prefer one-shot lectures" and "I study from one-shot
+ * lectures" describe the same fact, so a changed preference updates the
+ * existing row instead of piling up near-duplicates.
+ */
+export function similarity(a, b) {
+  const left = new Set(tokenise(a));
+  const right = new Set(tokenise(b));
+  if (left.size === 0 || right.size === 0) return 0;
+  let shared = 0;
+  for (const token of left) if (right.has(token)) shared += 1;
+  return shared / (left.size + right.size - shared);
+}
+
+/**
+ * Choose the memories that go into one request's prompt.
+ *
+ * Two passes, because a new chat needs both kinds of context:
+ *   1. matches — memories whose words overlap the current question;
+ *   2. baseline — the user's most durable notes, which make the assistant
+ *      already know them in a conversation that has no shared vocabulary yet.
+ *
+ * Everything is capped by `limit` here and by the character budget in
+ * buildMemoryBlock, so the prompt cannot grow with the size of the account.
+ *
+ * @returns {Array} a new array; never mutates the input
+ */
+export function selectForContext(
+  memories,
+  query,
+  { limit = MAX_CONTEXT_MEMORIES, baseline = MAX_BASELINE_MEMORIES } = {},
+) {
+  const list = (memories ?? []).filter((m) => m && typeof m.content === 'string');
+  if (list.length === 0 || limit <= 0) return [];
+
+  const baselineCap = Math.max(0, Math.min(baseline, limit));
+  const picked = [];
+  const seen = new Set();
+  const take = (memory) => {
+    const key = memory.id ?? dedupeKey(memory.content);
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    picked.push(memory);
+    return true;
+  };
+
+  const q = String(query ?? '').trim();
+  let matched = 0;
+  if (q) {
+    const scored = list
+      .map((memory) => ({ memory, score: scoreMemory(memory, q) }))
+      .filter((entry) => entry.score > 0)
+      .sort((a, b) => b.score - a.score || compareRecency(a.memory, b.memory));
+    for (const entry of scored) {
+      if (picked.length >= limit) break;
+      if (take(entry.memory)) matched += 1;
+    }
+  }
+
+  // With real matches, fill the remaining budget with durable notes; without
+  // any, include only the small baseline rather than dumping the whole list.
+  const target = matched > 0 ? limit : baselineCap;
+  for (const memory of [...list].sort(durableRank)) {
+    if (picked.length >= target) break;
+    take(memory);
+  }
+
+  return picked;
+}
+
+/* -------------------------------------------------------------------------- */
 /* Prompt block                                                               */
 /* -------------------------------------------------------------------------- */
 

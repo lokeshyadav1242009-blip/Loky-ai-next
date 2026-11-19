@@ -14,13 +14,46 @@
 import {
   MAX_MEMORIES_PER_USER,
   buildMemoryBlock,
-  selectRelevant,
+  selectForContext,
   validateMemory,
 } from '../public/memory-model.js';
 
 const DEFAULT_TIMEOUT_MS = 8000;
 /** Chat-time lookup must be fast: a slow memory read may not delay the answer. */
 const CHAT_LOOKUP_TIMEOUT_MS = 1800;
+/**
+ * How many rows a chat-time lookup may scan before ranking. Bounds the work per
+ * request; only MAX_CONTEXT_MEMORIES of them ever reach the prompt.
+ */
+const CONTEXT_SCAN_LIMIT = 150;
+
+/**
+ * Two column sets.
+ *
+ * The extended set carries the memory-intelligence fields from migration 0005
+ * (importance, confidence, source conversation). A deployment that has not
+ * applied it yet must keep working, so every query that selects them retries
+ * once with the legacy set when PostgREST reports a missing column.
+ */
+const LEGACY_COLUMNS = 'id,user_id,category,content,source,pinned,created_at,updated_at';
+const EXTENDED_COLUMNS = `${LEGACY_COLUMNS},importance,confidence,source_conversation_id`;
+
+/** Clamp a 0..1 number, falling back when the value is absent or nonsense. */
+function clampUnit(value, fallback) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return fallback;
+  return Math.min(1, Math.max(0, number));
+}
+
+/**
+ * Conversation ids are opaque client strings. Keep only a safe, bounded form so
+ * they cannot be used to smuggle anything into a query or a prompt.
+ */
+function cleanConversationId(value) {
+  const raw = String(value ?? '').trim();
+  if (!raw) return null;
+  return /^[A-Za-z0-9_-]{1,64}$/.test(raw) ? raw : null;
+}
 
 /** Pull Supabase credentials from the already-loaded config. */
 export function supabaseCreds(config) {
@@ -80,6 +113,18 @@ export function createMemoryStore({
         throw new MemoryError('That memory already exists.', { status: 409, code: 'duplicate' });
       }
       if (!response.ok) {
+        // A missing column is not an outage: it means this deployment has not
+        // applied the newest migration yet. Callers retry with legacy columns.
+        const detail = await response.text().catch(() => '');
+        if (
+          response.status === 400 &&
+          /PGRST204|42703|does not exist|schema cache/i.test(detail)
+        ) {
+          throw new MemoryError('Memory storage is missing a column.', {
+            status: 400,
+            code: 'schema_missing',
+          });
+        }
         throw new MemoryError('Memory storage is unavailable right now.', { status: 502 });
       }
 
@@ -102,13 +147,36 @@ export function createMemoryStore({
     }
   }
 
-  const columns = 'id,user_id,category,content,source,pinned,created_at,updated_at';
+  // Sticky for the lifetime of this store: once the database has told us the
+  // extended columns are absent, stop asking for them on every request.
+  let extendedColumns = true;
+
+  /**
+   * Run a query with the richest column set this database supports.
+   * @param {(columns: string, withExtras: boolean) => Promise<any>} build
+   */
+  async function runWithColumns(build) {
+    if (extendedColumns) {
+      try {
+        return await build(EXTENDED_COLUMNS, true);
+      } catch (error) {
+        if (error?.code !== 'schema_missing') throw error;
+        extendedColumns = false;
+      }
+    }
+    return build(LEGACY_COLUMNS, false);
+  }
 
   return {
+    /** True while the database still has the memory-intelligence columns. */
+    supportsExtendedColumns() {
+      return extendedColumns;
+    },
+
     /** Newest-first list for the Memory page. */
     async list({ limit = MAX_MEMORIES_PER_USER } = {}) {
-      const rows = await request(
-        `memories?select=${columns}&order=pinned.desc,updated_at.desc&limit=${limit}`,
+      const rows = await runWithColumns((cols) =>
+        request(`memories?select=${cols}&order=pinned.desc,updated_at.desc&limit=${limit}`),
       );
       return Array.isArray(rows) ? rows : [];
     },
@@ -140,14 +208,19 @@ export function createMemoryStore({
       return response;
     },
 
-    /** Validate again on the server — the client's checks are advisory. */
-    async create(input = {}) {
+    /**
+     * Validate again on the server — the client's checks are advisory.
+     *
+     * `knownExisting` lets the extraction pipeline pass the list it has already
+     * read, so saving five facts costs one read instead of five.
+     */
+    async create(input = {}, { knownExisting = null } = {}) {
       const checked = validateMemory(input);
       if (!checked.ok) {
         throw new MemoryError(checked.error, { status: 400, code: checked.code });
       }
 
-      const existing = await this.list();
+      const existing = knownExisting ?? (await this.list());
       if (existing.length >= MAX_MEMORIES_PER_USER) {
         throw new MemoryError('You have reached the memory limit. Delete some to add more.', {
           status: 400,
@@ -155,18 +228,25 @@ export function createMemoryStore({
         });
       }
 
-      const rows = await request(`memories?select=${columns}`, {
-        method: 'POST',
-        body: [
-          {
-            content: checked.value.content,
-            category: checked.value.category,
-            source: input.source === 'auto' ? 'auto' : 'manual',
-            pinned: Boolean(input.pinned),
-          },
-        ],
-        prefer: 'return=representation',
-      });
+      const base = {
+        content: checked.value.content,
+        category: checked.value.category,
+        source: input.source === 'auto' ? 'auto' : 'manual',
+        pinned: Boolean(input.pinned),
+      };
+      const extras = {
+        importance: clampUnit(input.importance, 0.5),
+        confidence: clampUnit(input.confidence, 0.6),
+        source_conversation_id: cleanConversationId(input.sourceConversationId),
+      };
+
+      const rows = await runWithColumns((cols, withExtras) =>
+        request(`memories?select=${cols}`, {
+          method: 'POST',
+          body: [withExtras ? { ...base, ...extras } : base],
+          prefer: 'return=representation',
+        }),
+      );
       return Array.isArray(rows) ? rows[0] : rows;
     },
 
@@ -188,11 +268,13 @@ export function createMemoryStore({
         throw new MemoryError('Nothing to update.', { status: 400, code: 'bad_request' });
       }
 
-      const rows = await request(`memories?id=eq.${encodeURIComponent(id)}&select=${columns}`, {
-        method: 'PATCH',
-        body: patch,
-        prefer: 'return=representation',
-      });
+      const rows = await runWithColumns((cols) =>
+        request(`memories?id=eq.${encodeURIComponent(id)}&select=${cols}`, {
+          method: 'PATCH',
+          body: patch,
+          prefer: 'return=representation',
+        }),
+      );
       return Array.isArray(rows) ? rows[0] : rows;
     },
 
@@ -213,8 +295,8 @@ export function createMemoryStore({
       const enabled = await this.getEnabled();
       if (!enabled) return { enabled: false, block: '', count: 0 };
 
-      const all = await this.list();
-      const relevant = selectRelevant(all, question);
+      const all = await this.list({ limit: CONTEXT_SCAN_LIMIT });
+      const relevant = selectForContext(all, question);
       return { enabled: true, block: buildMemoryBlock(relevant), count: relevant.length };
     },
   };
