@@ -43,6 +43,14 @@ import {
   selectImages,
 } from './chat-images.js';
 import { extractMath, isLongAnswer, mathTokenPattern } from './rich-text.js';
+import {
+  CONTINUED_NOTICE,
+  DEFAULT_CONTEXT_BUDGET,
+  buildSummaryPayload,
+  continuationLabel,
+  continuationRecord,
+  planContext,
+} from './chat-context.js';
 import { initMemoryUI, openMemory, resetMemory } from './memory-ui.js';
 import { sectionVisibility } from './section-visibility.js';
 
@@ -725,6 +733,11 @@ function renderMessages({ animateLastIndex = -1 } = {}) {
 
   el.chatTitle.textContent = conversation?.title ?? 'New chat';
 
+  // A split conversation must never be silent: show where it came from (or
+  // where it continued) with a link straight to the other half.
+  const continuation = buildContinuationBanner(conversation);
+  if (continuation) inner.append(continuation);
+
   if (messages.length === 0) {
     inner.append(buildHero());
   } else {
@@ -740,6 +753,118 @@ function renderMessages({ animateLastIndex = -1 } = {}) {
   el.messages.append(inner);
   renderNotice();
   scrollToBottom(true);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Infinite chat: rolling summary + continuation                              */
+/* -------------------------------------------------------------------------- */
+
+/** Token budget the server advertises, so both sides agree on the limit. */
+function contextBudget() {
+  const limit = Number(state.health?.limits?.contextTokens);
+  return Number.isFinite(limit) && limit > 0 ? limit : DEFAULT_CONTEXT_BUDGET;
+}
+
+/**
+ * Banner at the top of a conversation that was split, linking the two halves.
+ * Returns null when the chat has no continuation relationship.
+ */
+function buildContinuationBanner(conversation) {
+  const label = continuationLabel(conversation);
+  if (!label) return null;
+
+  const wrap = document.createElement('div');
+  wrap.className = 'chat-continuation';
+  wrap.setAttribute('role', 'status');
+
+  const text = document.createElement('span');
+  text.textContent = label;
+  wrap.append(text);
+
+  const targetId = conversation.continuedFrom || conversation.continuedTo;
+  const target = state.conversations.find((item) => item.id === targetId);
+  if (target) {
+    const link = document.createElement('button');
+    link.type = 'button';
+    link.className = 'chat-continuation__link';
+    link.textContent = conversation.continuedFrom ? 'Open original chat' : 'Open continuation';
+    link.addEventListener('click', () => selectConversation(target.id));
+    wrap.append(link);
+  }
+  return wrap;
+}
+
+/**
+ * Move the user into the continuation chat when they next write, so messages
+ * are never appended to the older, over-budget half.
+ */
+function followContinuation() {
+  const current = activeConversation();
+  if (!current?.continuedTo) return;
+  const next = state.conversations.find((item) => item.id === current.continuedTo);
+  if (!next) return;
+  state.activeId = next.id;
+  if (typeof renderHistory === 'function') renderHistory();
+  renderMessages();
+}
+
+/** Fold the due turns into a rolling summary (server-side, key stays server-side). */
+async function refreshSummary(conversation) {
+  const payload = buildSummaryPayload(conversation);
+  if (!payload) return false;
+
+  const headers = { 'Content-Type': 'application/json' };
+  const token = await currentAccessToken();
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  const response = await fetch('/api/summarize', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(payload.body),
+  });
+  if (!response.ok) return false;
+
+  const data = await response.json().catch(() => null);
+  if (!data || typeof data.summary !== 'string' || !data.summary.trim()) return false;
+
+  conversation.summary = data.summary.trim();
+  conversation.summaryUpTo = payload.upTo;
+  conversation.updatedAt = Date.now();
+  saveState();
+  return true;
+}
+
+/**
+ * Keep a long conversation usable: summarise older turns, then continue in a
+ * new chat that inherits that summary. Best-effort by design — a failure here
+ * must never break the reply the user just received.
+ */
+async function maintainContext(conversation) {
+  try {
+    let plan = planContext(conversation, contextBudget());
+
+    if (plan.needsSummary) {
+      const saved = await refreshSummary(conversation);
+      if (!saved) return;
+      plan = planContext(conversation, contextBudget());
+    }
+
+    if (!plan.needsContinuation) return;
+
+    const record = continuationRecord({
+      previous: conversation,
+      id: newId(),
+      summary: conversation.summary,
+    });
+    conversation.continuedTo = record.id;
+    conversation.updatedAt = Date.now();
+    state.conversations.unshift(record);
+    saveState();
+    if (typeof renderHistory === 'function') renderHistory();
+    toast(CONTINUED_NOTICE);
+  } catch {
+    /* context upkeep is best-effort: never surface as a chat failure */
+  }
 }
 
 function scrollToBottom(force = false) {
@@ -919,7 +1044,7 @@ async function currentAccessToken() {
   }
 }
 
-function chatRequest(token, messages, signal) {
+function chatRequest(token, messages, signal, summary) {
   const headers = { 'Content-Type': 'application/json', Accept: 'text/event-stream' };
   // Without this header the server sees an anonymous caller and answers
   // auth_required, which is the "Sign in to use this feature." failure.
@@ -927,7 +1052,9 @@ function chatRequest(token, messages, signal) {
   return fetch('/api/chat', {
     method: 'POST',
     headers,
-    body: JSON.stringify({ messages }),
+    // The rolling summary rides BESIDE `messages`: it is context for the
+    // model, never a turn the user actually wrote.
+    body: JSON.stringify(summary ? { messages, summary } : { messages }),
     signal,
   });
 }
@@ -945,10 +1072,10 @@ function networkFailure(signal) {
  * POST the conversation and stream the reply.
  * @returns {Promise<{text: string, aborted: boolean}>}
  */
-async function streamChat(messages, { onDelta, onMeta, signal }) {
+async function streamChat(messages, { onDelta, onMeta, signal, summary }) {
   let response;
   try {
-    response = await chatRequest(await currentAccessToken(), messages, signal);
+    response = await chatRequest(await currentAccessToken(), messages, signal, summary);
   } catch (error) {
     if (signal?.aborted) return { text: '', aborted: true };
     throw networkFailure(signal);
@@ -967,7 +1094,7 @@ async function streamChat(messages, { onDelta, onMeta, signal }) {
 
     if (refreshed) {
       try {
-        response = await chatRequest(refreshed, messages, signal);
+        response = await chatRequest(refreshed, messages, signal, summary);
       } catch (error) {
         if (signal?.aborted) return { text: '', aborted: true };
         throw networkFailure(signal);
@@ -1327,6 +1454,10 @@ function wireImageInput() {
 async function submit() {
   if (state.streaming) return;
 
+  // If this chat has already been continued, the next message belongs in the
+  // continuation so one conversation keeps a single thread.
+  followContinuation();
+
   const text = el.input.value.trim();
   // Only images that finished downscaling are sendable.
   const images = pendingImages
@@ -1414,6 +1545,7 @@ async function requestReply(conversation) {
   try {
     const result = await streamChat(messages, {
       signal: controller.signal,
+      summary: conversation.summary ?? '',
       onDelta: (text) => {
         latest = text;
         paint();
@@ -1439,6 +1571,10 @@ async function requestReply(conversation) {
     conversation.messages.push({ role: 'assistant', content: latest });
     conversation.updatedAt = Date.now();
     copyBtn.hidden = false;
+
+    // Long-conversation upkeep runs AFTER the answer is on screen, so it can
+    // never delay or interrupt the reply the user is reading.
+    maintainContext(conversation);
 
     copyBtn.addEventListener('click', async () => {
       const ok = await copyText(latest);
