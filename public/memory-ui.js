@@ -10,6 +10,7 @@
  */
 
 import { getAccessToken, refreshAccessToken } from './supabase-client.js';
+import { listState } from './memory-model.js';
 import {
   CATEGORY_META,
   MAX_CONTENT_CHARS,
@@ -40,6 +41,24 @@ let root = null;
 let onCount = null;
 
 /* --------------------------------- network -------------------------------- */
+
+const OFFLINE_MESSAGE = 'Could not reach LOKY AI. Check your connection and try again.';
+const EXPIRED_MESSAGE = 'Your session expired. Sign in again to open your memories.';
+
+/**
+ * Turns whatever the network layer threw into a sentence the page can show.
+ * Browsers only ever say "Failed to fetch" / "Load failed" for a dead
+ * connection, and an empty message is worse still, so both become readable copy
+ * instead of a blank panel.
+ */
+function describeFailure(error) {
+  if (error?.status === 401) return EXPIRED_MESSAGE;
+  const message = String(error?.message ?? '').trim();
+  if (!message || /failed to fetch|load failed|network ?error|networkerror/i.test(message)) {
+    return OFFLINE_MESSAGE;
+  }
+  return message;
+}
 
 async function api(path, { method = 'GET', body } = {}) {
   const call = async (token) =>
@@ -122,6 +141,9 @@ function notify(message) {
 /* --------------------------------- actions -------------------------------- */
 
 async function load() {
+  // One in-flight request at a time: reopening the page must not fire a second
+  // list, and a retry must not race the first attempt.
+  if (state.loading) return;
   state.loading = true;
   state.error = '';
   render();
@@ -132,7 +154,9 @@ async function load() {
     state.configured = data?.configured !== false;
     state.loaded = true;
   } catch (error) {
-    state.error = error.message;
+    // A failed fetch keeps whatever rows are already on screen; the banner
+    // explains the failure instead of the list silently vanishing.
+    state.error = describeFailure(error);
     state.loaded = true;
   } finally {
     state.loading = false;
@@ -504,6 +528,29 @@ function renderList() {
   list.replaceChildren();
 
   const items = visibleMemories();
+  const mode = listState({
+    loading: state.loading,
+    error: state.error,
+    configured: state.configured,
+    total: state.memories.length,
+    matches: items.length,
+  });
+
+  // While the first fetch is in flight the loading card above says everything;
+  // painting "Nothing saved yet" now would be a claim we cannot support yet.
+  if (mode === 'loading') return;
+
+  if (mode === 'error') {
+    const failed = node('div', 'memory__empty');
+    failed.append(
+      node('p', 'memory__empty-title', 'Your memories did not load'),
+      node('p', 'memory__empty-text', state.error),
+      button('Try again', 'memory__save', () => load()),
+    );
+    list.append(failed);
+    return;
+  }
+
   if (items.length === 0) {
     const empty = node('div', 'memory__empty');
     if (!state.configured) {
@@ -531,8 +578,20 @@ function renderList() {
   for (const memory of items) list.append(renderCardItem(memory));
 }
 
-function render() {
-  if (!root) return;
+function renderFallback() {
+  const wrap = node('div', 'memory__shell');
+  const box = node('div', 'memory__empty');
+  box.append(
+    node('p', 'memory__empty-title', 'Memory could not be displayed'),
+    node('p', 'memory__empty-text',
+      'Something went wrong while drawing this page. Your saved notes are safe.'),
+    button('Try again', 'memory__save', () => render()),
+  );
+  wrap.append(box);
+  return wrap;
+}
+
+function paint() {
   root.replaceChildren();
 
   const shell = node('div', 'memory__shell');
@@ -556,6 +615,19 @@ function render() {
     shell.append(errorBox);
   }
 
+  // The page must never be blank: before the first response arrives this card
+  // is the screen, so a slow or stalled request still shows intent.
+  if (state.loading && state.memories.length === 0) {
+    const loading = node('div', 'memory__empty');
+    loading.setAttribute('role', 'status');
+    loading.setAttribute('aria-live', 'polite');
+    loading.append(
+      node('p', 'memory__empty-title', 'Loading your memories…'),
+      node('p', 'memory__empty-text', 'Fetching your saved notes from LOKY memory.'),
+    );
+    shell.append(loading);
+  }
+
   const list = node('div', 'memory__list');
   shell.append(list);
 
@@ -564,6 +636,20 @@ function render() {
 
   root.append(shell);
   renderList();
+}
+
+/**
+ * A render that throws used to leave an empty root on screen — which is exactly
+ * the black screen. Now a failure paints a visible explanation with a retry.
+ */
+function render() {
+  if (!root) return;
+  try {
+    paint();
+  } catch (error) {
+    console.error('[memory] render failed:', error?.message ?? error);
+    root.replaceChildren(renderFallback());
+  }
 }
 
 /* --------------------------------- public --------------------------------- */
@@ -578,7 +664,13 @@ export function initMemoryUI({ countHook } = {}) {
 
 /** Called every time the Memory section is opened. */
 export function openMemory() {
-  if (!root) return;
+  // Resolve the section again rather than returning silently: a silent return
+  // is precisely how a screen ends up blank.
+  if (!root) root = document.getElementById('memory');
+  if (!root) {
+    console.warn('[memory] #memory section is missing from the page');
+    return;
+  }
   if (!state.loaded && !state.loading) {
     load();
   } else {

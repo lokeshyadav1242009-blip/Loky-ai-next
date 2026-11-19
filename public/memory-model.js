@@ -340,3 +340,21 @@ export function countByCategory(memories) {
   }
   return counts;
 }
+
+/**
+ * Which state the Memory list should show.
+ *
+ * Order matters: an in-flight first load beats everything, and a failure with no
+ * rows beats "nothing saved yet" — otherwise a dead network is misreported as an
+ * empty account. Rows already on screen keep rendering if a refresh failed.
+ *
+ * @returns {'loading'|'error'|'list'|'needs-supabase'|'empty'|'no-matches'}
+ */
+export function listState({ loading = false, error = '', configured = true, total = 0, matches = 0 } = {}) {
+  if (loading && total === 0) return 'loading';
+  if (error && total === 0) return 'error';
+  if (matches > 0) return 'list';
+  if (!configured) return 'needs-supabase';
+  if (total === 0) return 'empty';
+  return 'no-matches';
+}
