@@ -378,17 +378,25 @@ async function startGoogle() {
  * providers, so a project without Google credentials shows nothing rather than
  * a button that dead-ends.
  */
-async function applyOAuthAvailability() {
-  let enabled = false;
-  try {
-    enabled = isProviderEnabled(await loadAuthSettings(), 'google');
-  } catch {
-    enabled = false;
+async function applyOAuthAvailability({ attempts = 2 } = {}) {
+  // One failed settings request must not hide the button for the whole session:
+  // a single retry covers a cold start or a network blip. The check still ends
+  // closed, so a project without Google never shows a dead button.
+  let settings = null;
+  for (let attempt = 0; attempt < attempts && !settings; attempt += 1) {
+    if (attempt > 0) await new Promise((resolve) => setTimeout(resolve, 400));
+    try {
+      settings = await loadAuthSettings();
+    } catch {
+      settings = null;
+    }
   }
+  const enabled = isProviderEnabled(settings, 'google');
   state.oauthEnabled = enabled;
   for (const node of [el.oauthSignIn, el.oauthSignUp]) {
     if (node) node.hidden = !enabled;
   }
+  return enabled;
 }
 
 /** Save the username for an already-authenticated user who has none. */
