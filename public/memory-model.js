@@ -322,8 +322,13 @@ export function similarity(a, b) {
  *
  * Two passes, because a new chat needs both kinds of context:
  *   1. matches — memories whose words overlap the current question;
- *   2. baseline — the user's most durable notes, which make the assistant
- *      already know them in a conversation that has no shared vocabulary yet.
+ *   2. baseline — only when the question matches NOTHING, the user's most
+ *      durable notes, so the assistant still knows them in a conversation
+ *      that has no shared vocabulary yet.
+ *
+ * The baseline is deliberately exclusive: once a question already points at
+ * specific notes, adding unrelated ones would put noise in the prompt. That is
+ * also the contract the existing retrieval test pins down.
  *
  * Everything is capped by `limit` here and by the character budget in
  * buildMemoryBlock, so the prompt cannot grow with the size of the account.
@@ -362,12 +367,13 @@ export function selectForContext(
     }
   }
 
-  // With real matches, fill the remaining budget with durable notes; without
-  // any, include only the small baseline rather than dumping the whole list.
-  const target = matched > 0 ? limit : baselineCap;
-  for (const memory of [...list].sort(durableRank)) {
-    if (picked.length >= target) break;
-    take(memory);
+  // With real matches, send exactly those. Without any, fall back to the small
+  // baseline instead of either sending nothing or dumping the whole list.
+  if (matched === 0) {
+    for (const memory of [...list].sort(durableRank)) {
+      if (picked.length >= baselineCap) break;
+      take(memory);
+    }
   }
 
   return picked;
