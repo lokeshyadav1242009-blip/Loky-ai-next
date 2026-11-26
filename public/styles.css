@@ -4692,3 +4692,209 @@ body.auth-locked #messenger {
   .composer__attach,
   .preview__remove { transition: none; }
 }
+
+/* ---------------------- friend management (0007) ------------------------- */
+
+.dm-requests__count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  margin-left: 8px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: rgba(25, 230, 140, 0.16);
+  color: var(--accent, #19e68c);
+  font-size: 11px;
+  font-weight: 700;
+  vertical-align: middle;
+}
+
+.friend-menu-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.friend-menu__trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--muted, #8fa39a);
+  font-size: 19px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 160ms ease, color 160ms ease, border-color 160ms ease;
+}
+
+.friend-menu__trigger:hover,
+.friend-menu__trigger:focus-visible,
+.friend-menu__trigger[aria-expanded="true"] {
+  background: rgba(25, 230, 140, 0.12);
+  border-color: rgba(25, 230, 140, 0.3);
+  color: var(--accent, #19e68c);
+  outline: none;
+}
+
+.friend-menu__trigger:active {
+  transform: scale(0.94);
+}
+
+.friend-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 40;
+  display: flex;
+  min-width: 168px;
+  flex-direction: column;
+  padding: 6px;
+  border: 1px solid rgba(25, 230, 140, 0.24);
+  border-radius: 12px;
+  background: rgba(6, 20, 14, 0.98);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.55);
+  animation: friendMenuIn 140ms ease-out;
+}
+
+.friend-menu[hidden] {
+  display: none;
+}
+
+.friend-menu__item {
+  padding: 9px 11px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text, #eaf6ef);
+  font-size: 13.5px;
+  text-align: left;
+  cursor: pointer;
+  transition: background 140ms ease, color 140ms ease;
+}
+
+.friend-menu__item:hover,
+.friend-menu__item:focus-visible {
+  background: rgba(25, 230, 140, 0.14);
+  color: var(--accent, #19e68c);
+  outline: none;
+}
+
+.friend-menu__item--danger {
+  color: #ff9a9a;
+}
+
+.friend-menu__item--danger:hover,
+.friend-menu__item--danger:focus-visible {
+  background: rgba(255, 90, 90, 0.16);
+  color: #ffb3b3;
+}
+
+@keyframes friendMenuIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.friend-dialog {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(0, 0, 0, 0.62);
+  animation: friendDialogFade 140ms ease-out;
+}
+
+.friend-dialog__card {
+  width: min(360px, 100%);
+  padding: 20px;
+  border: 1px solid rgba(25, 230, 140, 0.26);
+  border-radius: 16px;
+  background: rgba(7, 22, 16, 0.99);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6);
+  animation: friendDialogIn 160ms ease-out;
+}
+
+.friend-dialog__title {
+  margin: 0 0 8px;
+  color: var(--text, #eaf6ef);
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.friend-dialog__body {
+  margin: 0 0 18px;
+  color: var(--muted, #9fb4aa);
+  font-size: 13.5px;
+  line-height: 1.55;
+}
+
+.friend-dialog__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.btn--danger {
+  border: 1px solid rgba(255, 90, 90, 0.42);
+  background: rgba(255, 90, 90, 0.16);
+  color: #ffb3b3;
+}
+
+.btn--danger:hover,
+.btn--danger:focus-visible {
+  background: rgba(255, 90, 90, 0.26);
+  color: #fff;
+}
+
+@keyframes friendDialogFade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes friendDialogIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (max-width: 420px) {
+  .friend-dialog__actions {
+    flex-direction: column-reverse;
+  }
+
+  .friend-dialog__actions .btn {
+    width: 100%;
+  }
+
+  .friend-menu {
+    min-width: 154px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .friend-menu,
+  .friend-dialog,
+  .friend-dialog__card {
+    animation: none;
+  }
+}
