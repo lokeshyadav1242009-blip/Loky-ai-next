@@ -214,10 +214,13 @@ test('every management call is granted to authenticated users only', () => {
 });
 
 test('the migration is additive: no user content is dropped or rewritten', () => {
-  assert.equal(/drop table/i.test(MIGRATION), false);
-  assert.equal(/truncate/i.test(MIGRATION), false);
-  assert.equal(/delete from public\.(messages|conversations|conversation_members|profiles|memories)/i.test(MIGRATION), false);
-  assert.equal(/alter table public\.(messages|conversations|profiles)\s+drop/i.test(MIGRATION), false);
+  // Only executable SQL matters: the header comment deliberately uses words
+  // like "truncates" to promise the opposite of a destructive statement.
+  const sql = MIGRATION.replace(/--[^\n]*/g, '');
+  assert.equal(/drop table/i.test(sql), false);
+  assert.equal(/truncate/i.test(sql), false);
+  assert.equal(/delete from public\.(messages|conversations|conversation_members|profiles|memories)/i.test(sql), false);
+  assert.equal(/alter table public\.(messages|conversations|profiles)\s+drop/i.test(sql), false);
   assert.match(MIGRATION, /^begin;/m);
   assert.match(MIGRATION, /^commit;/m);
 });
