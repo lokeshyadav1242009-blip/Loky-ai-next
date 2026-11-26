@@ -103,6 +103,78 @@ export function describeFriendError(code) {
     not_authenticated: 'Please sign in again.',
     reason_required: 'Please add a short reason.',
     not_authorized: 'You are not allowed to do that.',
+    user_blocked: 'This chat is unavailable because one of you blocked the other.',
+    cannot_block_self: 'You cannot block yourself.',
+    cannot_remove_self: 'You cannot remove yourself.',
+    not_friends: 'You are not friends with this person any more.',
+    block_not_found: 'That person is not in your blocked list.',
+    migration_missing: 'Friend management is not enabled on the server yet.',
   };
   return map[code] || 'Something went wrong. Please try again.';
+}
+
+/* ---------------------------- friend management --------------------------- */
+
+/**
+ * The three-dot menu shown on every friend row. Both entries need a
+ * confirmation step, so the menu only names the intent; the UI asks first.
+ */
+export const FRIEND_MENU_ITEMS = [
+  { id: 'remove', label: 'Remove friend', danger: false },
+  { id: 'block', label: 'Block user', danger: true },
+];
+
+/** Which menu a row may show. Only real friends get one; never yourself. */
+export function friendMenuModel(status) {
+  if (status !== 'friends') return { visible: false, items: [] };
+  return { visible: true, items: FRIEND_MENU_ITEMS.map((item) => ({ ...item })) };
+}
+
+function handleFor(name) {
+  const clean = String(name || '').trim();
+  if (!clean) return 'this person';
+  return clean.startsWith('@') ? clean : `@${clean}`;
+}
+
+export function removeFriendConfirmText(name) {
+  const handle = handleFor(name);
+  return {
+    title: 'Remove friend?',
+    body: `${handle} will be removed from your friends. They will not be blocked and can send you a new request later.`,
+    confirmLabel: 'Remove friend',
+    danger: false,
+  };
+}
+
+export function blockUserConfirmText(name) {
+  const handle = handleFor(name);
+  return {
+    title: 'Block user?',
+    body: `${handle} will be removed from your friends and cannot message you, send friend requests or react in your chats. Their existing messages stay in your history.`,
+    confirmLabel: 'Block user',
+    danger: true,
+  };
+}
+
+/**
+ * Pure list updates so the UI can react the instant the database confirms an
+ * action, without waiting for the next poll.
+ */
+export function withoutPerson(list, userId) {
+  return (Array.isArray(list) ? list : []).filter(
+    (row) => row && row.user_id !== userId && row.id !== userId,
+  );
+}
+
+export function withPerson(list, row) {
+  const base = Array.isArray(list) ? list : [];
+  if (!row || !row.id) return base;
+  if (base.some((item) => item && item.id === row.id)) return base;
+  return [row, ...base];
+}
+
+/** Blocked list rows from public.my_blocked_users(), never including yourself. */
+export function blockedListModel(rows, meId) {
+  const list = Array.isArray(rows) ? rows.filter(Boolean) : [];
+  return list.filter((row) => row.id !== meId && row.username);
 }

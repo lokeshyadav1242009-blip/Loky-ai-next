@@ -27,6 +27,12 @@ export const FRIEND_ERROR_CODES = new Set([
   'report_target_required',
   'message_not_found',
   'migration_missing',
+  // friend management (see 0007_friend_blocks.sql)
+  'user_blocked',
+  'cannot_block_self',
+  'cannot_remove_self',
+  'not_friends',
+  'block_not_found',
 ]);
 
 /**
@@ -83,6 +89,27 @@ export function respondToFriendRequest(requestId, decision) {
 
 export function cancelFriendRequest(requestId) {
   return call('cancel_friend_request', { request_id: requestId });
+}
+
+/* ---------------------------- friend management ---------------------------- */
+
+/** Removes the friendship for both users. Never blocks anybody. */
+export function removeFriend(userId) {
+  return call('remove_friend', { other_user: userId });
+}
+
+/** Blocks a user: drops the friendship and cancels pending requests. */
+export function blockUser(userId) {
+  return call('block_user', { other_user: userId });
+}
+
+export function unblockUser(userId) {
+  return call('unblock_user', { other_user: userId });
+}
+
+/** Everyone you have blocked, for the Blocked users section. */
+export function listBlockedUsers() {
+  return call('my_blocked_users', {});
 }
 
 /* --------------------------------- presence -------------------------------- */
