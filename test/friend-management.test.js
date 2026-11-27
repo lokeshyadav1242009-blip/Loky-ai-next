@@ -205,12 +205,44 @@ test('every management call is granted to authenticated users only', () => {
     'public\\.block_user\\(uuid\\)',
     'public\\.unblock_user\\(uuid\\)',
     'public\\.my_blocked_users\\(\\)',
-    'public\\.is_blocked\\(uuid, uuid\\)',
     'public\\.conversation_blocked\\(uuid\\)',
   ]) {
     assert.match(MIGRATION, new RegExp(`grant execute on function ${fn}\\s+to authenticated`), `${fn} must be callable by a signed-in user`);
   }
   assert.equal(/to anon/i.test(MIGRATION), false, 'blocks must never be exposed to anonymous visitors');
+});
+
+test('EXECUTE is least-privilege, so anonymous visitors cannot manage blocks', () => {
+  const sql = MIGRATION.replace(/--[^\n]*/g, '');
+
+  // is_blocked is internal: only SECURITY DEFINER code calls it, and that code
+  // runs with the owner's privileges, so no client role may keep EXECUTE.
+  assert.ok(
+    sql.includes('revoke all on function public.is_blocked(uuid, uuid) from public, anon, authenticated;'),
+    'is_blocked must be revoked from PUBLIC, anon and authenticated',
+  );
+  assert.equal(
+    sql.includes('grant execute on function public.is_blocked'),
+    false,
+    'is_blocked must never be granted back to a client role',
+  );
+
+  // conversation_blocked is referenced by the messages INSERT policy, which is
+  // evaluated as the invoking role, so authenticated must keep EXECUTE.
+  assert.ok(sql.includes('revoke all on function public.conversation_blocked(uuid) from public, anon;'));
+  assert.ok(sql.includes('grant execute on function public.conversation_blocked(uuid) to authenticated;'));
+
+  for (const fn of ['remove_friend(uuid)', 'block_user(uuid)', 'unblock_user(uuid)', 'my_blocked_users()']) {
+    assert.ok(
+      sql.includes(`revoke all on function public.${fn} `) && /from public, anon, authenticated;/.test(sql),
+      `${fn} must be revoked from PUBLIC and anon before being granted back`,
+    );
+    assert.ok(sql.includes(`grant execute on function public.${fn}`), `${fn} must stay callable by a signed-in user`);
+  }
+
+  // PUBLIC is the role PostgreSQL silently grants EXECUTE to on every function,
+  // which is exactly how anon could reach these before this fix.
+  assert.equal(/grant execute on function[^;]*to anon/i.test(sql), false, 'no function may be granted to anon');
 });
 
 test('the migration is additive: no user content is dropped or rewritten', () => {
