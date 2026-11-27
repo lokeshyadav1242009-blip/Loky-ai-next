@@ -286,3 +286,35 @@ export function friendAction(status, isSelf) {
       return { label: 'Add friend', disabled: false, action: 'request' };
   }
 }
+
+/* ---------------------- conversation header (Phase 2) ---------------------- */
+
+/**
+ * Menu shown in a conversation header.
+ *
+ * Only actions that apply to the current relationship are returned: a removed
+ * friend keeps the chat but loses "Remove friend", and a blocked peer offers
+ * "Unblock user" instead of "Block user".
+ */
+export function threadMenuModel({ isFriend = false, isBlocked = false, isSelf = false } = {}) {
+  if (isSelf) return { visible: false, items: [] };
+  const items = [{ id: 'profile', label: 'View profile', danger: false }];
+  if (isFriend && !isBlocked) items.push({ id: 'remove', label: 'Remove friend', danger: false });
+  if (isBlocked) items.push({ id: 'unblock', label: 'Unblock user', danger: false });
+  else items.push({ id: 'block', label: 'Block user', danger: true });
+  return { visible: true, items };
+}
+
+/** True when personId appears in the signed-in user's own block list. */
+export function isPersonBlocked(blocked, personId) {
+  if (!personId) return false;
+  const list = Array.isArray(blocked) ? blocked : [];
+  return list.some((person) => person && person.id === personId);
+}
+
+/** Banner copy for a conversation the user has blocked. */
+export function threadBlockedNotice(username) {
+  const clean = String(username || '').trim();
+  const handle = clean ? (clean.startsWith('@') ? clean : `@${clean}`) : 'this user';
+  return `You blocked ${handle}. Unblock to send new messages — existing messages stay in your history.`;
+}

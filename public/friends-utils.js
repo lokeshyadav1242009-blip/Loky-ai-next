@@ -156,6 +156,16 @@ export function blockUserConfirmText(name) {
   };
 }
 
+export function unblockConfirmText(name) {
+  const handle = handleFor(name);
+  return {
+    title: 'Unblock user?',
+    body: `${handle} will be able to message you and send friend requests again. You will not become friends automatically.`,
+    confirmLabel: 'Unblock',
+    danger: false,
+  };
+}
+
 /**
  * Pure list updates so the UI can react the instant the database confirms an
  * action, without waiting for the next poll.
