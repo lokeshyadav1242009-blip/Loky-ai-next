@@ -279,11 +279,25 @@ test('friends are refreshed on tab switch and on open, not only after a request 
   assert.match(friendsSliceFunction('open'), /refreshFriendRows\(\)/);
 });
 
-test('the friends list is never derived from chat threads', () => {
+test('the friends list merges accepted friends with chat-only contacts, keyed by user id', () => {
   const render = friendsSliceFunction('renderFriends');
   assert.notEqual(render, '', 'renderFriends must exist');
-  assert.equal(/state\.threads/.test(render), false, 'chats must not be relabelled as friends');
-  assert.match(render, /state\.friendRows/);
+  // Superseded invariant: chat participants used to be excluded from Friends on
+  // purpose, which left the tab empty for anyone with no accepted request.
+  // They are now listed as "Chat contact" alongside accepted friends, but only
+  // through the pure merge so labels and de-duplication stay unit-testable.
+  assert.match(render, /buildContacts\(/, 'the merge must go through the pure model');
+  assert.match(render, /state\.friendRows/, 'accepted friendships must still be read');
+  assert.match(render, /state\.threads/, 'chat-only contacts must be included');
+  assert.match(render, /meId/, 'the caller must be passed so they are not listed as their own contact');
+});
+
+test('the friends merge never fabricates a friendship row', () => {
+  const render = friendsSliceFunction('renderFriends');
+  // A chat contact is presented with its own row shape; nothing here may invent
+  // a friends_since or an accepted status for somebody who never accepted.
+  assert.equal(/friends_since\s*:\s*new Date/.test(render), false);
+  assert.equal(/kind\s*:\s*'friend'/.test(render), false, 'the kind is decided by the model, not the view');
 });
 
 test('a failed friends load is reported instead of silently becoming an empty list', () => {
