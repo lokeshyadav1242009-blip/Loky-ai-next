@@ -20,6 +20,17 @@
 --   * The messages INSERT policy is additionally hardened with
 --     `not conversation_blocked(...)` as defence in depth.
 --   * Unblocking is allowed only for the person who created the block.
+--   * EXECUTE is least-privilege. PostgreSQL grants EXECUTE to PUBLIC on every
+--     new function, so "grant ... to authenticated" on its own still left these
+--     callable by anon. Every function below is explicitly revoked from PUBLIC
+--     and anon; only the four client-facing RPCs are granted back to
+--     authenticated, plus conversation_blocked because an RLS policy invokes it
+--     as the caller. is_blocked stays owner-only: only SECURITY DEFINER code
+--     calls it, and that code runs with the owner's privileges.
+--   * Trigger functions keep their default grants on purpose: PostgreSQL
+--     requires the role that fires a trigger to hold EXECUTE on the trigger
+--     function, so revoking there would break message sending itself. They
+--     return type `trigger`, which PostgREST cannot expose as an RPC.
 
 begin;
 
@@ -86,8 +97,18 @@ as $$
   );
 $$;
 
-grant execute on function public.is_blocked(uuid, uuid)      to authenticated;
-grant execute on function public.conversation_blocked(uuid)  to authenticated;
+-- Least privilege on the internal helpers.
+--   is_blocked is never referenced by an RLS policy: it is called only from
+--   conversation_blocked and the BEFORE INSERT/UPDATE trigger functions, all of
+--   which are SECURITY DEFINER and therefore run as the owner. No signed-in or
+--   anonymous client needs EXECUTE on it, so it is removed from every role.
+revoke all on function public.is_blocked(uuid, uuid) from public, anon, authenticated;
+
+--   conversation_blocked IS referenced by the messages INSERT policy, and policy
+--   expressions are evaluated as the invoking role, so authenticated keeps
+--   EXECUTE. PUBLIC and anon lose it.
+revoke all on function public.conversation_blocked(uuid) from public, anon;
+grant execute on function public.conversation_blocked(uuid) to authenticated;
 
 /* ------------------------------- remove friend ---------------------------- */
 
@@ -229,10 +250,18 @@ as $$
   order by bl.created_at desc;
 $$;
 
-grant execute on function public.remove_friend(uuid)      to authenticated;
-grant execute on function public.block_user(uuid)         to authenticated;
-grant execute on function public.unblock_user(uuid)       to authenticated;
-grant execute on function public.my_blocked_users()       to authenticated;
+-- The four client-callable RPCs. Revoking from PUBLIC is what actually removes
+-- the implicit anon access; the explicit anon/authenticated revoke keeps the
+-- intent readable and makes the script safe to re-run.
+revoke all on function public.remove_friend(uuid)     from public, anon, authenticated;
+revoke all on function public.block_user(uuid)        from public, anon, authenticated;
+revoke all on function public.unblock_user(uuid)      from public, anon, authenticated;
+revoke all on function public.my_blocked_users()      from public, anon, authenticated;
+
+grant execute on function public.remove_friend(uuid)     to authenticated;
+grant execute on function public.block_user(uuid)        to authenticated;
+grant execute on function public.unblock_user(uuid)      to authenticated;
+grant execute on function public.my_blocked_users()      to authenticated;
 
 /* ---------------------- database-side block enforcement ------------------- */
 
