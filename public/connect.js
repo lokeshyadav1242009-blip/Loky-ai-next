@@ -152,6 +152,55 @@ function h(tag, className, text) {
   return node;
 }
 
+/**
+ * Builds an inline SVG icon.
+ *
+ * The header used to draw its controls with the characters U+2190 (←) and
+ * U+22EE (⋮). Both code points are missing from many system fonts, and a
+ * missing glyph paints nothing while the text still appears in the
+ * accessibility tree, so both controls looked absent even though their boxes
+ * were laid out. Vector shapes cannot fall back to a blank glyph.
+ */
+function svgIcon(kind) {
+  const NS = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(NS, 'svg');
+  svg.setAttribute('viewBox', '0 0 24 24');
+  svg.setAttribute('aria-hidden', 'true');
+  svg.setAttribute('focusable', 'false');
+  svg.setAttribute('class', 'connect-icon__svg');
+  if (kind === 'dots') {
+    [5.5, 12, 18.5].forEach((cy) => {
+      const dot = document.createElementNS(NS, 'circle');
+      dot.setAttribute('cx', '12');
+      dot.setAttribute('cy', String(cy));
+      dot.setAttribute('r', '1.85');
+      dot.setAttribute('fill', 'currentColor');
+      svg.append(dot);
+    });
+    return svg;
+  }
+  const path = document.createElementNS(NS, 'path');
+  path.setAttribute('d', 'M15 5 8 12l7 7');
+  path.setAttribute('fill', 'none');
+  path.setAttribute('stroke', 'currentColor');
+  path.setAttribute('stroke-width', '2.2');
+  path.setAttribute('stroke-linecap', 'round');
+  path.setAttribute('stroke-linejoin', 'round');
+  svg.append(path);
+  return svg;
+}
+
+/** The ⋮ button shared by the Friends rows and the conversation header. */
+function dotsButton(ariaLabel) {
+  const toggle = h('button', 'connect-friend__dots');
+  toggle.type = 'button';
+  toggle.setAttribute('aria-haspopup', 'menu');
+  toggle.setAttribute('aria-expanded', 'false');
+  toggle.setAttribute('aria-label', ariaLabel);
+  toggle.append(svgIcon('dots'));
+  return toggle;
+}
+
 function clear(node) {
   while (node && node.firstChild) node.removeChild(node.firstChild);
 }
@@ -379,10 +428,9 @@ function buildThread() {
   dom.backBtn = h('button', 'connect-icon connect-icon--back');
   dom.backBtn.type = 'button';
   dom.backBtn.setAttribute('aria-label', 'Back to chats');
-  dom.backBtn.append(
-    h('span', 'connect-back__arrow', '←'),
-    h('span', 'connect-back__label', 'Back to chats')
-  );
+  const backArrow = h('span', 'connect-back__arrow');
+  backArrow.append(svgIcon('arrow'));
+  dom.backBtn.append(backArrow, h('span', 'connect-back__label', 'Back to chats'));
   dom.backBtn.addEventListener('click', () => closeThread());
 
   dom.threadAvatar = avatarNode('?', 'thread', null, 'sm');
@@ -489,11 +537,7 @@ function renderThreadHead() {
   });
 
   if (menu.visible) {
-    const toggle = h('button', 'connect-friend__dots', '⋮');
-    toggle.type = 'button';
-    toggle.setAttribute('aria-haspopup', 'menu');
-    toggle.setAttribute('aria-expanded', 'false');
-    toggle.setAttribute('aria-label', `Manage ${state.active.username || 'this chat'}`);
+    const toggle = dotsButton(`Manage ${state.active.username || 'this chat'}`);
 
     const panel = h('div', 'connect-friend__menu');
     panel.setAttribute('role', 'menu');
@@ -732,11 +776,7 @@ function friendRow(contact) {
   // Remove/Block only make sense for an accepted friendship.
   const menu = isFriendContact(contact) ? friendMenuModel('friends') : { visible: false, items: [] };
   if (menu.visible) {
-    const toggle = h('button', 'connect-friend__dots', '⋮');
-    toggle.type = 'button';
-    toggle.setAttribute('aria-haspopup', 'menu');
-    toggle.setAttribute('aria-expanded', 'false');
-    toggle.setAttribute('aria-label', `Manage ${contact.username}`);
+    const toggle = dotsButton(`Manage ${contact.username}`);
 
     const panel = h('div', 'connect-friend__menu');
     panel.setAttribute('role', 'menu');

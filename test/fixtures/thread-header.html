@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>thread header fixture</title>
+<!--
+  Development fixture for the LOKY AI conversation header.
+
+  The signed-in app is unreachable without Supabase credentials, so this page
+  loads the REAL public/styles.css + public/upgrade.css and renders the same
+  markup connect.js produces for the header, then measures the result and
+  prints a PASS/FAIL verdict. It is not served by the app (it lives outside
+  public/) and is only used for local visual verification.
+-->
+<link rel="stylesheet" href="../../public/styles.css" />
+<link rel="stylesheet" href="../../public/upgrade.css" />
+<style>
+  html, body { margin: 0; height: 100%; background: #030806; font-family: system-ui, -apple-system, sans-serif; }
+  .fixture-shell { position: fixed; inset: 0; display: flex; flex-direction: column; }
+  #report {
+    position: fixed; left: 12px; right: 12px; bottom: 12px; max-height: 46vh; overflow: auto;
+    background: #04120d; border: 1px solid rgba(25, 230, 140, .4); border-radius: 10px;
+    padding: 10px 12px; font: 12px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace;
+    color: #d6fff0; white-space: pre-wrap; z-index: 999; margin: 0;
+  }
+  .ok { color: #19e68c; }
+  .bad { color: #ff8a8a; }
+</style>
+</head>
+<body>
+<div class="fixture-shell">
+  <section class="connect-thread" id="thread" style="position: relative; inset: auto; flex: 1 1 auto;">
+    <header class="connect-thread__top" id="top">
+      <button class="connect-icon connect-icon--back" id="back" type="button" aria-label="Back to chats">
+        <span class="connect-back__arrow" id="arrow"></span>
+        <span class="connect-back__label" id="label">Back to chats</span>
+      </button>
+      <div class="connect-thread__who">
+        <strong class="connect-thread__name">@sunita</strong>
+        <small class="connect-thread__presence">Offline</small>
+      </div>
+      <div class="connect-friend__more connect-thread__more" id="more">
+        <button class="connect-friend__dots" id="dots" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="Manage @sunita"></button>
+      </div>
+    </header>
+    <div class="connect-thread__scroll">
+      <div class="connect-bubble connect-bubble--in">sample message</div>
+    </div>
+  </section>
+</div>
+<pre id="report">measuring…</pre>
+<script>
+(function () {
+  'use strict';
+  var NS = 'http://www.w3.org/2000/svg';
+
+  // Same construction as svgIcon() in public/connect.js.
+  function icon(kind) {
+    var svg = document.createElementNS(NS, 'svg');
+    svg.setAttribute('viewBox', '0 0 24 24');
+    svg.setAttribute('aria-hidden', 'true');
+    svg.setAttribute('focusable', 'false');
+    svg.setAttribute('class', 'connect-icon__svg');
+    if (kind === 'dots') {
+      [5.5, 12, 18.5].forEach(function (cy) {
+        var dot = document.createElementNS(NS, 'circle');
+        dot.setAttribute('cx', '12');
+        dot.setAttribute('cy', String(cy));
+        dot.setAttribute('r', '1.85');
+        dot.setAttribute('fill', 'currentColor');
+        svg.appendChild(dot);
+      });
+      return svg;
+    }
+    var path = document.createElementNS(NS, 'path');
+    path.setAttribute('d', 'M15 5 8 12l7 7');
+    path.setAttribute('fill', 'none');
+    path.setAttribute('stroke', 'currentColor');
+    path.setAttribute('stroke-width', '2.2');
+    path.setAttribute('stroke-linecap', 'round');
+    path.setAttribute('stroke-linejoin', 'round');
+    svg.appendChild(path);
+    return svg;
+  }
+
+  var back = document.getElementById('back');
+  var arrow = document.getElementById('arrow');
+  var label = document.getElementById('label');
+  var dots = document.getElementById('dots');
+  arrow.appendChild(icon('arrow'));
+  dots.appendChild(icon('dots'));
+  var arrowSvg = arrow.querySelector('svg');
+  var dotsSvg = dots.querySelector('svg');
+
+  function parse(c) {
+    var m = String(c).match(/rgba?\(([^)]+)\)/);
+    if (!m) return { r: 0, g: 0, b: 0, a: 1 };
+    var p = m[1].split(',').map(function (v) { return parseFloat(v); });
+    return { r: p[0], g: p[1], b: p[2], a: p.length > 3 ? p[3] : 1 };
+  }
+  function over(top, bottom) {
+    var a = top.a + bottom.a * (1 - top.a);
+    if (a === 0) return { r: 0, g: 0, b: 0, a: 0 };
+    return {
+      r: (top.r * top.a + bottom.r * bottom.a * (1 - top.a)) / a,
+      g: (top.g * top.a + bottom.g * bottom.a * (1 - top.a)) / a,
+      b: (top.b * top.a + bottom.b * bottom.a * (1 - top.a)) / a,
+      a: a
+    };
+  }
+  function effectiveBg(el) {
+    var stack = [];
+    for (var n = el; n && n.nodeType === 1; n = n.parentElement) {
+      var c = parse(getComputedStyle(n).backgroundColor);
+      if (c.a > 0) stack.push(c);
+    }
+    var base = { r: 3, g: 8, b: 6, a: 1 };
+    for (var i = stack.length - 1; i >= 0; i--) base = over(stack[i], base);
+    return base;
+  }
+  function lum(c) {
+    function f(v) { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }
+    return 0.2126 * f(c.r) + 0.7152 * f(c.g) + 0.0722 * f(c.b);
+  }
+  function contrast(fg, bg) {
+    var a = lum(fg), b = lum(bg);
+    var hi = Math.max(a, b), lo = Math.min(a, b);
+    return (hi + 0.05) / (lo + 0.05);
+  }
+  function rect(el) {
+    var r = el.getBoundingClientRect();
+    return { x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.width), h: Math.round(r.height) };
+  }
+  function topAt(el) {
+    var r = el.getBoundingClientRect();
+    var hit = document.elementFromPoint(Math.round(r.x + r.width / 2), Math.round(r.y + r.height / 2));
+    return hit && (hit === el || el.contains(hit) || hit.contains(el)) ? el : hit;
+  }
+
+  var checks = [];
+  function check(name, ok, detail) {
+    checks.push({ name: name, ok: !!ok, detail: detail });
+  }
+
+  [['back button', back, 3], ['back arrow svg', arrowSvg, 3], ['back label', label, 4.5], ['dots button', dots, 3], ['dots svg', dotsSvg, 3]]
+    .forEach(function (row) {
+      var name = row[0], el = row[1], min = row[2];
+      var r = rect(el), cs = getComputedStyle(el);
+      var fg = parse(cs.color), bg = effectiveBg(el);
+      var ratio = contrast(fg, bg);
+      var painter = topAt(el);
+      var visible = cs.display !== 'none' && cs.visibility === 'visible' && parseFloat(cs.opacity) >= 0.9;
+      check(name + ': has size', r.w > 0 && r.h > 0, r.w + 'x' + r.h + ' at ' + r.x + ',' + r.y);
+      check(name + ': visible', visible, 'display=' + cs.display + ' visibility=' + cs.visibility + ' opacity=' + cs.opacity);
+      check(name + ': contrast >= ' + min, ratio >= min, ratio.toFixed(2) + ':1');
+      check(name + ': on top', painter === el, painter ? (painter.tagName + '.' + (painter.getAttribute('class') || '')) : 'none');
+    });
+
+  var headerRect = rect(document.getElementById('top'));
+  check('header row inside viewport', headerRect.y >= 0 && headerRect.x >= 0 && headerRect.y + headerRect.h <= window.innerHeight,
+    'y=' + headerRect.y + ' h=' + headerRect.h + ' viewportH=' + window.innerHeight);
+  check('back label readable text', label.textContent.trim() === 'Back to chats', JSON.stringify(label.textContent.trim()));
+  check('arrow svg is vector, not a glyph', arrowSvg && arrowSvg.tagName.toLowerCase() === 'svg' && arrowSvg.querySelector('path') !== null, 'path present');
+  check('dots svg draws 3 circles', dotsSvg && dotsSvg.querySelectorAll('circle').length === 3, (dotsSvg ? dotsSvg.querySelectorAll('circle').length : 0) + ' circles');
+
+  var failed = checks.filter(function (c) { return !c.ok; });
+  var lines = checks.map(function (c) {
+    return (c.ok ? '[PASS] ' : '[FAIL] ') + c.name + ' — ' + c.detail;
+  });
+  lines.push('');
+  lines.push('FIXTURE-RESULT: ' + (failed.length ? 'FAIL (' + failed.length + ')' : 'PASS'));
+  document.getElementById('report').textContent = lines.join('\n');
+  document.getElementById('report').className = failed.length ? 'bad' : 'ok';
+  document.documentElement.setAttribute('data-fixture-result', failed.length ? 'fail' : 'pass');
+})();
+</script>
+</body>
+</html>
