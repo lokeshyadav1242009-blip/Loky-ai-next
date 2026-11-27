@@ -40,6 +40,23 @@ import {
 } from './supabase-client.js';
 
 import {
+  removeFriend,
+  blockUser,
+  unblockUser,
+  listBlockedUsers,
+  friendErrorCode,
+} from './friends-client.js';
+
+import {
+  friendMenuModel,
+  removeFriendConfirmText,
+  blockUserConfirmText,
+  withoutPerson,
+  blockedListModel,
+  describeFriendError,
+} from './friends-utils.js';
+
+import {
   normalizeSearchTerm,
   isSearchable,
   describeSearchState,
@@ -107,6 +124,11 @@ const state = {
   avatarCache: new Map(),
   mediaCache: new Map(),
   lastTypingAt: 0,
+  friendsLoading: false,
+  friendsError: '',
+  friendsInflight: null,
+  blocked: [],
+  blockedError: '',
 };
 
 const dom = {};
@@ -264,6 +286,8 @@ function build() {
   dom.sheet.append(dom.sheetPanel);
 
   section.append(header, tabs, dom.notice, dom.panes, dom.thread, dom.sheet);
+  // Any click outside an open three-dot menu closes it.
+  document.addEventListener('click', closeMenus);
   state.built = true;
   setTab(state.tab);
 }
@@ -288,8 +312,15 @@ function buildChatsPane(pane) {
 function buildFriendsPane(pane) {
   pane.append(h('h2', 'connect-pane__title', 'Friends'));
   dom.friendList = h('ul', 'connect-list');
-  dom.friendEmpty = h('p', 'connect-empty', 'No friends yet. Send a request from Discover.');
+  dom.friendEmpty = h('p', 'connect-empty', 'No friends yet.');
   pane.append(dom.friendList, dom.friendEmpty);
+
+  dom.blockedSection = h('section', 'connect-blocked');
+  dom.blockedSection.append(h('h3', 'connect-group', 'Blocked users'));
+  dom.blockedList = h('ul', 'connect-list');
+  dom.blockedEmpty = h('p', 'connect-empty', 'You have not blocked anyone.');
+  dom.blockedSection.append(dom.blockedList, dom.blockedEmpty);
+  pane.append(dom.blockedSection);
 }
 
 function buildRequestsPane(pane) {
@@ -450,19 +481,121 @@ function renderBadges() {
 function renderFriends() {
   if (!dom.friendList) return;
   clear(dom.friendList);
-  dom.friendEmpty.hidden = state.friendRows.length > 0;
-  for (const friend of state.friendRows) {
-    const li = h('li', 'connect-friend');
-    const btn = h('button', 'connect-friend__btn');
-    btn.type = 'button';
-    btn.append(avatarNode(friend.username, friend.username, friend.avatar_seed, 'md'));
+
+  const rows = Array.isArray(state.friendRows) ? state.friendRows : [];
+  const loading = state.friendsLoading;
+  const error = state.friendsError;
+  const empty = !loading && !error && rows.length === 0;
+
+  // The empty state must never claim "no friends" when the load actually
+  // failed: that is what made a failed RPC look like an empty Friends list.
+  dom.friendEmpty.hidden = !(loading || Boolean(error) || empty);
+
+  if (loading) {
+    dom.friendEmpty.textContent = 'Loading your friends…';
+  } else if (error) {
+    dom.friendEmpty.textContent = `${describeFriendError(error)} Your friends could not be loaded.`;
+  } else if (empty) {
+    // Chats are conversations; Friends are accepted friend requests. Being able
+    // to message somebody does not make them a friend, so say so plainly
+    // instead of quietly showing an empty list.
+    dom.friendEmpty.textContent =
+      'No friends yet. People you can message in Chats are not friends until one of you accepts a friend request — search a username in Discover to send one.';
+  }
+
+  if (error) {
+    const retry = h('button', 'connect-btn connect-btn--primary', 'Try again');
+    retry.type = 'button';
+    retry.addEventListener('click', () => {
+      refreshFriendRows();
+      refreshBlocked();
+    });
+    dom.friendEmpty.append(document.createElement('br'), retry);
+  }
+
+  for (const friend of rows) dom.friendList.append(friendRow(friend));
+
+  renderBlocked();
+}
+
+function friendRow(friend) {
+  const li = h('li', 'connect-friend');
+
+  const btn = h('button', 'connect-friend__btn');
+  btn.type = 'button';
+  btn.append(avatarNode(friend.username, friend.username, friend.avatar_seed, 'md'));
+  const body = h('div', 'connect-friend__body');
+  body.append(h('strong', 'connect-friend__name', friend.display_name || `@${friend.username}`));
+  body.append(h('span', 'connect-friend__meta', `@${friend.username}`));
+  btn.append(body, h('span', 'connect-friend__cta', 'Message'));
+  btn.addEventListener('click', () => startChatWith(friend));
+
+  const wrap = h('div', 'connect-friend__more');
+  const menu = friendMenuModel('friends');
+  if (menu.visible) {
+    const toggle = h('button', 'connect-friend__dots', '⋮');
+    toggle.type = 'button';
+    toggle.setAttribute('aria-haspopup', 'menu');
+    toggle.setAttribute('aria-expanded', 'false');
+    toggle.setAttribute('aria-label', `Manage ${friend.username}`);
+
+    const panel = h('div', 'connect-friend__menu');
+    panel.setAttribute('role', 'menu');
+    panel.hidden = true;
+
+    for (const item of menu.items) {
+      const action = h(
+        'button',
+        `connect-friend__item${item.danger ? ' connect-friend__item--danger' : ''}`,
+        item.label
+      );
+      action.type = 'button';
+      action.setAttribute('role', 'menuitem');
+      action.addEventListener('click', (event) => {
+        event.stopPropagation();
+        closeMenus();
+        if (item.id === 'remove') runRemoveFriend(friend, action);
+        else if (item.id === 'block') runBlockUser(friend, action);
+      });
+      panel.append(action);
+    }
+
+    toggle.addEventListener('click', (event) => {
+      event.stopPropagation();
+      const wasHidden = panel.hidden;
+      closeMenus();
+      panel.hidden = !wasHidden;
+      toggle.setAttribute('aria-expanded', String(wasHidden));
+    });
+
+    wrap.append(toggle, panel);
+  }
+
+  li.append(btn, wrap);
+  return li;
+}
+
+function renderBlocked() {
+  if (!dom.blockedSection) return;
+  const rows = Array.isArray(state.blocked) ? state.blocked : [];
+  clear(dom.blockedList);
+  dom.blockedSection.hidden = rows.length === 0 && !state.blockedError;
+  dom.blockedEmpty.hidden = rows.length > 0;
+  dom.blockedEmpty.textContent = state.blockedError
+    ? describeFriendError(state.blockedError)
+    : 'You have not blocked anyone.';
+
+  for (const person of rows) {
+    const li = h('li', 'connect-friend connect-friend--blocked');
+    li.append(avatarNode(person.username, person.username, person.avatar_seed, 'md'));
     const body = h('div', 'connect-friend__body');
-    body.append(h('strong', 'connect-friend__name', friend.display_name || `@${friend.username}`));
-    body.append(h('span', 'connect-friend__meta', `@${friend.username}`));
-    btn.append(body, h('span', 'connect-friend__cta', 'Message'));
-    btn.addEventListener('click', () => startChatWith(friend));
-    li.append(btn);
-    dom.friendList.append(li);
+    body.append(h('strong', 'connect-friend__name', person.display_name || `@${person.username}`));
+    body.append(h('span', 'connect-friend__meta', `@${person.username}`));
+    const btn = h('button', 'connect-btn', 'Unblock');
+    btn.type = 'button';
+    btn.addEventListener('click', () => runUnblock(person, btn));
+    li.append(body, btn);
+    dom.blockedList.append(li);
   }
 }
 
@@ -593,12 +726,155 @@ async function refreshThreads() {
 }
 
 async function refreshFriendRows() {
-  try {
-    state.friendRows = await friends();
-  } catch (error) {
-    state.friendRows = [];
-  }
+  // One shared request, so a poll and a user action cannot race into a stale paint.
+  if (state.friendsInflight) return state.friendsInflight;
+
+  state.friendsLoading = true;
+  state.friendsError = '';
   renderFriends();
+
+  state.friendsInflight = (async () => {
+    try {
+      const rows = await friends();
+      state.friendRows = Array.isArray(rows) ? rows : [];
+      state.friendsError = '';
+    } catch (error) {
+      // Keep the reason: an empty array alone cannot be told apart from failure.
+      state.friendRows = [];
+      state.friendsError = friendErrorCode(error);
+    } finally {
+      state.friendsLoading = false;
+      state.friendsInflight = null;
+      renderFriends();
+    }
+  })();
+
+  return state.friendsInflight;
+}
+
+async function refreshBlocked() {
+  if (!state.me) {
+    state.blocked = [];
+    state.blockedError = '';
+    renderBlocked();
+    return;
+  }
+  try {
+    const rows = await listBlockedUsers();
+    state.blocked = blockedListModel(rows, state.me && state.me.id);
+    state.blockedError = '';
+  } catch (error) {
+    state.blocked = [];
+    state.blockedError = friendErrorCode(error);
+  }
+  renderBlocked();
+}
+
+/* ------------------------------ friend actions ---------------------------- */
+
+function closeMenus() {
+  for (const panel of document.querySelectorAll('.connect-friend__menu')) panel.hidden = true;
+  for (const btn of document.querySelectorAll('.connect-friend__dots')) {
+    btn.setAttribute('aria-expanded', 'false');
+  }
+}
+
+/** Confirm step for the two destructive actions; resolves true only on confirm. */
+function confirmDialog(model) {
+  return new Promise((resolve) => {
+    const overlay = h('div', 'connect-confirm');
+    const card = h('div', 'connect-confirm__card');
+    card.setAttribute('role', 'dialog');
+    card.setAttribute('aria-modal', 'true');
+    card.append(h('h3', 'connect-confirm__title', model.title));
+    card.append(h('p', 'connect-confirm__body', model.body));
+
+    const actions = h('div', 'connect-confirm__actions');
+    const cancel = h('button', 'connect-btn', 'Cancel');
+    cancel.type = 'button';
+    const ok = h(
+      'button',
+      `connect-btn ${model.danger ? 'connect-btn--danger' : 'connect-btn--primary'}`,
+      model.confirmLabel
+    );
+    ok.type = 'button';
+
+    let settled = false;
+    const done = (value) => {
+      if (settled) return;
+      settled = true;
+      document.removeEventListener('keydown', onKey);
+      overlay.remove();
+      resolve(value);
+    };
+    const onKey = (event) => {
+      if (event.key === 'Escape') done(false);
+    };
+
+    cancel.addEventListener('click', () => done(false));
+    ok.addEventListener('click', () => done(true));
+    document.addEventListener('keydown', onKey);
+
+    actions.append(cancel, ok);
+    card.append(actions);
+    overlay.append(card);
+    dom.section.append(overlay);
+    ok.focus();
+  });
+}
+
+async function runRemoveFriend(friend, trigger) {
+  if (!friend || !friend.user_id) return;
+  if (!(await confirmDialog(removeFriendConfirmText(friend.username)))) return;
+
+  trigger.disabled = true;
+  try {
+    await removeFriend(friend.user_id);
+    state.friendRows = withoutPerson(state.friendRows, friend.user_id);
+    renderFriends();
+    say(`@${friend.username} removed from your friends.`, 'ok');
+    await refreshFriendRows();
+  } catch (error) {
+    say(describeFriendError(friendErrorCode(error)), 'bad');
+    await refreshFriendRows();
+  } finally {
+    trigger.disabled = false;
+  }
+}
+
+async function runBlockUser(friend, trigger) {
+  if (!friend || !friend.user_id) return;
+  if (!(await confirmDialog(blockUserConfirmText(friend.username)))) return;
+
+  trigger.disabled = true;
+  try {
+    await blockUser(friend.user_id);
+    state.friendRows = withoutPerson(state.friendRows, friend.user_id);
+    renderFriends();
+    say(`@${friend.username} is blocked.`, 'ok');
+    await Promise.all([refreshFriendRows(), refreshBlocked()]);
+  } catch (error) {
+    say(describeFriendError(friendErrorCode(error)), 'bad');
+  } finally {
+    trigger.disabled = false;
+  }
+}
+
+async function runUnblock(person, trigger) {
+  if (!person || !person.id) return;
+  trigger.disabled = true;
+  try {
+    await unblockUser(person.id);
+    state.blocked = withoutPerson(state.blocked, person.id);
+    renderBlocked();
+    say(`@${person.username} is unblocked.`, 'ok');
+    await refreshBlocked();
+  } catch (error) {
+    say(describeFriendError(friendErrorCode(error)), 'bad');
+    await refreshBlocked();
+  } finally {
+    trigger.disabled = false;
+  }
 }
 
 async function refreshRequestRows() {
@@ -1224,7 +1500,10 @@ function setTab(tab) {
   dom.panes.hidden = false;
   dom.thread.hidden = true;
 
-  if (next === TAB_FRIENDS) refreshFriendRows();
+  if (next === TAB_FRIENDS) {
+    refreshFriendRows();
+    refreshBlocked();
+  }
   if (next === TAB_REQUESTS) refreshRequestRows();
   if (next === TAB_DISCOVER) renderResults();
   if (next === TAB_CHATS) renderThreads();
@@ -1295,7 +1574,7 @@ export async function open() {
   renderMeAvatar();
 
   await Promise.all([refreshThreads(), refreshRequestRows(), refreshNotifications()]);
-  if (state.tab === TAB_FRIENDS) await refreshFriendRows();
+  if (state.tab === TAB_FRIENDS) await Promise.all([refreshFriendRows(), refreshBlocked()]);
 
   touchLastSeen().catch(() => {});
   startPolling();
