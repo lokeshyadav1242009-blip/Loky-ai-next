@@ -256,3 +256,75 @@ test('the migration is additive: no user content is dropped or rewritten', () =>
   assert.match(MIGRATION, /^begin;/m);
   assert.match(MIGRATION, /^commit;/m);
 });
+
+/* ------------- Friends list wiring (empty-section bug regression) ---------- */
+
+const friendsConnectSrc = readFileSync(
+  join(dirname(fileURLToPath(import.meta.url)), '..', 'public', 'connect.js'),
+  'utf8',
+);
+
+/** Slice one top-level function out of connect.js by name. */
+function friendsSliceFunction(name) {
+  const head = new RegExp(`(?:^|\\n)(?:export )?(?:async )?function ${name}\\(`);
+  const match = head.exec(friendsConnectSrc);
+  if (!match) return '';
+  const rest = friendsConnectSrc.slice(match.index + 1);
+  const next = /\n(?:export )?(?:async )?function /.exec(rest);
+  return next ? rest.slice(0, next.index) : rest;
+}
+
+test('friends are refreshed on tab switch and on open, not only after a request action', () => {
+  assert.match(friendsSliceFunction('setTab'), /refreshFriendRows\(\)/);
+  assert.match(friendsSliceFunction('open'), /refreshFriendRows\(\)/);
+});
+
+test('the friends list is never derived from chat threads', () => {
+  const render = friendsSliceFunction('renderFriends');
+  assert.notEqual(render, '', 'renderFriends must exist');
+  assert.equal(/state\.threads/.test(render), false, 'chats must not be relabelled as friends');
+  assert.match(render, /state\.friendRows/);
+});
+
+test('a failed friends load is reported instead of silently becoming an empty list', () => {
+  const refresh = friendsSliceFunction('refreshFriendRows');
+  assert.match(refresh, /friendsError/, 'the failure reason must be kept');
+  assert.match(refresh, /catch/);
+  assert.equal(
+    /catch \(error\) \{\s*state\.friendRows = \[\];\s*\}/.test(refresh),
+    false,
+    'swallowing the error into [] is the original bug',
+  );
+});
+
+test('connect.js wires all four friend-management RPCs through the existing client', () => {
+  for (const name of ['removeFriend', 'blockUser', 'unblockUser', 'listBlockedUsers']) {
+    assert.match(friendsConnectSrc, new RegExp(`\\b${name}\\b`), `${name} must be wired`);
+  }
+});
+
+test('every friend row renders the three-dot menu with both actions', () => {
+  const row = friendsSliceFunction('friendRow');
+  assert.notEqual(row, '', 'friendRow must exist');
+  assert.match(row, /friendMenuModel\('friends'\)/);
+  assert.match(row, /connect-friend__dots/);
+  assert.match(row, /item\.id === 'remove'/);
+  assert.match(row, /item\.id === 'block'/);
+  assert.match(row, /confirmDialog/, 'both actions must confirm first');
+});
+
+test('the blocked users section lists blocked people and offers unblock', () => {
+  assert.match(friendsConnectSrc, /blockedListModel\(/);
+  const blocked = friendsSliceFunction('renderBlocked');
+  assert.notEqual(blocked, '', 'renderBlocked must exist');
+  assert.match(blocked, /Unblock/);
+  assert.match(friendsSliceFunction('refreshBlocked'), /listBlockedUsers\(\)/);
+});
+
+test('remove and block refresh the affected lists after succeeding', () => {
+  assert.match(friendsSliceFunction('runRemoveFriend'), /refreshFriendRows\(\)/);
+  const block = friendsSliceFunction('runBlockUser');
+  assert.match(block, /refreshFriendRows\(\)/);
+  assert.match(block, /refreshBlocked\(\)/);
+  assert.match(friendsSliceFunction('runUnblock'), /refreshBlocked\(\)/);
+});
