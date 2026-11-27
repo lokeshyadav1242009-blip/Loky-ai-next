@@ -95,7 +95,7 @@ export function unreadLabel(count) {
 
 /** Human preview for a chat row. Deleted beats media beats text. */
 export function previewText(row = {}) {
-  if (row.deleted_at) return 'Message deleted';
+  if (row.deleted_at) return DELETED_TEXT;
   if (row.media_type === 'image') {
     return row.body ? `📷 ${String(row.body).slice(0, 60)}` : '📷 Photo';
   }
@@ -104,6 +104,45 @@ export function previewText(row = {}) {
   }
   const body = typeof row.body === 'string' ? row.body.trim() : '';
   return body ? body.slice(0, 80) : 'No messages yet';
+}
+
+/**
+ * Shown in place of a message its sender deleted for everyone.
+ *
+ * Deletion is a soft delete: the row stays so both participants keep the
+ * timeline position, and public.connect_delete_message() has already blanked
+ * body, media_path and media_type so nothing of the original survives.
+ */
+export const DELETED_TEXT = 'This message was deleted';
+
+/**
+ * Whether the viewer may be offered a delete control on this row.
+ *
+ * This is a UI mirror only. The real check lives in the database function
+ * public.connect_delete_message(), which matches on sender_id = auth.uid() and
+ * raises 42501 for anyone else, so hiding the button is convenience and never
+ * the security boundary.
+ */
+export function canDeleteMessage(row, meId) {
+  if (!row || !meId) return false;
+  if (row.sender_id !== meId) return false;
+  return !row.deleted_at;
+}
+
+/** Turn a connect_delete_message failure into a sentence for the notice bar. */
+export function deleteMessageErrorText(error) {
+  const code = error && error.code != null ? String(error.code) : '';
+  const message = error && error.message ? String(error.message) : '';
+  if (code === '42501' || /only the sender/i.test(message)) {
+    return 'You can only delete your own messages.';
+  }
+  if (code === '401' || /not_authenticated|not authenticated|expired|jwt/i.test(message)) {
+    return 'Your session expired — sign in again to delete messages.';
+  }
+  if (/failed to fetch|network|timeout|aborted/i.test(message)) {
+    return 'Network problem — the message was not deleted. Try again.';
+  }
+  return message || 'That message could not be deleted.';
 }
 
 /** Short clock label (HH:MM) in the viewer's locale. */
