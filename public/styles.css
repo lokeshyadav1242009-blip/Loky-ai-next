@@ -5283,3 +5283,89 @@ body.auth-locked #messenger {
   height: 20px;
   fill: currentColor;
 }
+
+/* ── Delete for everyone: sender-only ⋮ menu on an outgoing message ──────────
+   The bubble hosts the control, so it must be a positioning context. The panel
+   is absolutely placed against the bubble rather than the row so it cannot be
+   clipped by the thread's scroll container on small screens. */
+.connect-bubble { position: relative; }
+
+.connect-bubble__dots {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  font-size: 17px;
+  line-height: 1;
+  color: var(--connect-muted, #8fb8a6);
+  background: rgba(3, 8, 6, 0.78);
+  border: 1px solid rgba(25, 230, 140, 0.28);
+  border-radius: 9px;
+  cursor: pointer;
+  opacity: 0.8;
+  transition: opacity 140ms ease, color 140ms ease, border-color 140ms ease;
+}
+
+.connect-bubble__dots:hover,
+.connect-bubble__dots:focus-visible,
+.connect-bubble__dots[aria-expanded='true'] {
+  opacity: 1;
+  color: var(--connect-accent, #19e68c);
+  border-color: rgba(25, 230, 140, 0.62);
+}
+
+.connect-bubble__dots:focus-visible {
+  outline: 2px solid rgba(25, 230, 140, 0.7);
+  outline-offset: 2px;
+}
+
+.connect-bubble__actions {
+  position: absolute;
+  top: 40px;
+  right: 4px;
+  z-index: 12;
+  min-width: 172px;
+  padding: 6px;
+  background: rgba(6, 18, 14, 0.98);
+  border: 1px solid rgba(25, 230, 140, 0.28);
+  border-radius: 12px;
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.55);
+}
+
+.connect-bubble__actions[hidden] { display: none; }
+
+.connect-bubble__action {
+  display: block;
+  width: 100%;
+  padding: 10px;
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  color: var(--connect-text, #e6f4ee);
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.connect-bubble__action:hover,
+.connect-bubble__action:focus-visible { background: rgba(25, 230, 140, 0.12); }
+
+.connect-bubble__action--danger { color: #ff9a9a; }
+
+.connect-bubble__action--danger:hover,
+.connect-bubble__action--danger:focus-visible { background: rgba(255, 90, 90, 0.16); }
+
+/* Thumbs need a larger hit target than a mouse pointer does. */
+@media (pointer: coarse) {
+  .connect-bubble__dots { width: 38px; height: 38px; font-size: 19px; }
+  .connect-bubble__actions { top: 46px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .connect-bubble__dots { transition: none; }
+}
