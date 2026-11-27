@@ -97,6 +97,8 @@ import {
 } from './connect-model.js';
 
 import { openLayer, closeLayer } from './back-nav.js';
+import { threadMenuModel, threadBlockedNotice, isPersonBlocked } from './connect-model.js';
+import { unblockConfirmText } from './friends-utils.js';
 
 const TAB_CHATS = CONNECT_TABS[0].id;
 const TAB_FRIENDS = CONNECT_TABS[1].id;
@@ -371,9 +373,16 @@ function buildThread() {
   wrap.hidden = true;
 
   const top = h('header', 'connect-thread__top');
-  dom.backBtn = h('button', 'connect-icon', '←');
+  // Back to the chat list. The arrow is always present and the label appears
+  // from 720px up, because an unlabelled 36px arrow was the only way out of a
+  // conversation on a desktop browser.
+  dom.backBtn = h('button', 'connect-icon connect-icon--back');
   dom.backBtn.type = 'button';
   dom.backBtn.setAttribute('aria-label', 'Back to chats');
+  dom.backBtn.append(
+    h('span', 'connect-back__arrow', '←'),
+    h('span', 'connect-back__label', 'Back to chats')
+  );
   dom.backBtn.addEventListener('click', () => closeThread());
 
   dom.threadAvatar = avatarNode('?', 'thread', null, 'sm');
@@ -381,7 +390,12 @@ function buildThread() {
   dom.threadName = h('strong', 'connect-thread__name', 'Chat');
   dom.threadPresence = h('small', 'connect-thread__presence', '');
   who.append(dom.threadName, dom.threadPresence);
-  top.append(dom.backBtn, dom.threadAvatar, who);
+
+  // Header menu (View profile / Remove friend / Block / Unblock). Filled by
+  // renderThreadHead() because the available actions depend on the
+  // relationship with this specific peer.
+  dom.threadMore = h('div', 'connect-friend__more connect-thread__more');
+  top.append(dom.backBtn, dom.threadAvatar, who, dom.threadMore);
 
   dom.scroll = h('div', 'connect-thread__scroll');
 
@@ -438,6 +452,128 @@ function markActiveChat(li) {
     row.classList.remove('connect-chat--active');
   }
   if (li) li.classList.add('connect-chat--active');
+}
+
+/* --------------------------- conversation header -------------------------- */
+
+/**
+ * Paints the conversation header menu, the blocked banner and the composer.
+ *
+ * Blocking is enforced in the database (BEFORE INSERT triggers raise
+ * 'user_blocked'); this only mirrors that state so the user sees why a chat is
+ * read-only instead of typing a message that cannot be delivered.
+ */
+function renderThreadHead() {
+  if (!dom.threadMore || !state.active) return;
+
+  // Created on first use so buildThread() stays unaware of the banner.
+  if (!dom.threadBlocked) {
+    dom.threadBlocked = h('div', 'connect-thread__blocked');
+    dom.threadBlocked.hidden = true;
+    dom.scroll.before(dom.threadBlocked);
+  }
+
+  const peerId = state.active.peerId || null;
+  const isBlocked = isPersonBlocked(state.blocked, peerId);
+  state.active.blocked = isBlocked;
+
+  const friendRow = peerId
+    ? state.friendRows.find((row) => row && row.user_id === peerId) || null
+    : null;
+
+  clear(dom.threadMore);
+  const menu = threadMenuModel({
+    isFriend: Boolean(friendRow),
+    isBlocked,
+    isSelf: Boolean(peerId && state.me && peerId === state.me.id),
+  });
+
+  if (menu.visible) {
+    const toggle = h('button', 'connect-friend__dots', '⋮');
+    toggle.type = 'button';
+    toggle.setAttribute('aria-haspopup', 'menu');
+    toggle.setAttribute('aria-expanded', 'false');
+    toggle.setAttribute('aria-label', `Manage ${state.active.username || 'this chat'}`);
+
+    const panel = h('div', 'connect-friend__menu');
+    panel.setAttribute('role', 'menu');
+    panel.hidden = true;
+
+    for (const item of menu.items) {
+      const action = h(
+        'button',
+        `connect-friend__item${item.danger ? ' connect-friend__item--danger' : ''}`,
+        item.label
+      );
+      action.type = 'button';
+      action.setAttribute('role', 'menuitem');
+      action.addEventListener('click', async (event) => {
+        event.stopPropagation();
+        closeMenus();
+        const target = friendRow || { user_id: peerId, username: state.active.username };
+        if (item.id === 'profile') openPeerProfile();
+        else if (item.id === 'remove') await runRemoveFriend(target, action);
+        else if (item.id === 'block') await runBlockUser(target, action);
+        else if (item.id === 'unblock') {
+          await runUnblock({ id: peerId, username: state.active.username }, action);
+        }
+        renderThreadHead();
+      });
+      panel.append(action);
+    }
+
+    toggle.addEventListener('click', (event) => {
+      event.stopPropagation();
+      const wasHidden = panel.hidden;
+      closeMenus();
+      panel.hidden = !wasHidden;
+      toggle.setAttribute('aria-expanded', String(wasHidden));
+    });
+
+    dom.threadMore.append(toggle, panel);
+  }
+
+  clear(dom.threadBlocked);
+  dom.threadBlocked.hidden = !isBlocked;
+  if (isBlocked) {
+    dom.threadBlocked.append(
+      h('span', 'connect-thread__blocked-text', threadBlockedNotice(state.active.username))
+    );
+    const unblock = h('button', 'connect-btn', 'Unblock');
+    unblock.type = 'button';
+    unblock.addEventListener('click', async () => {
+      await runUnblock({ id: peerId, username: state.active.username }, unblock);
+      renderThreadHead();
+    });
+    dom.threadBlocked.append(unblock);
+  }
+
+  dom.input.disabled = isBlocked;
+  dom.sendBtn.disabled = isBlocked;
+  dom.attachBtn.disabled = isBlocked;
+}
+
+/** Read-only profile card for the conversation peer. No email, no private data. */
+function openPeerProfile() {
+  const active = state.active;
+  if (!active) return;
+  const peerId = active.peerId || null;
+  const isBlocked = isPersonBlocked(state.blocked, peerId);
+  const friendRow = peerId
+    ? state.friendRows.find((row) => row && row.user_id === peerId) || null
+    : null;
+
+  const head = h('div', 'connect-profile__head');
+  head.append(avatarNode(active.name, active.username, active.avatar, 'lg'));
+  const who = h('div');
+  who.append(h('strong', null, active.name || 'Profile'));
+  who.append(
+    h('span', 'connect-profile__username', active.username ? `@${active.username}` : 'No username')
+  );
+  head.append(who);
+
+  const relation = isBlocked ? 'Blocked' : friendRow ? 'Friend' : 'Chat contact';
+  openSheet('Profile', [head, h('p', 'connect-empty', `Relationship: ${relation}`)]);
 }
 
 function renderThreads() {
@@ -927,6 +1063,7 @@ async function runBlockUser(friend, trigger) {
 
 async function runUnblock(person, trigger) {
   if (!person || !person.id) return;
+  if (!(await confirmDialog(unblockConfirmText(person.username)))) return;
   trigger.disabled = true;
   try {
     await unblockUser(person.id);
@@ -1092,6 +1229,8 @@ async function openThread(row) {
     name: row.peer_display_name || (row.peer_username ? `@${row.peer_username}` : 'Chat'),
     username: row.peer_username,
     avatar: row.peer_avatar_url,
+    peerId: row.peer_id || null,
+    blocked: false,
   };
   state.messages = [];
   state.attachment = null;
@@ -1109,6 +1248,11 @@ async function openThread(row) {
   dom.input.value = '';
   dom.scroll.className = 'connect-thread__scroll';
   dom.scroll.textContent = 'Loading messages…';
+
+  renderThreadHead();
+  // state.blocked is only filled by the Friends pane, so refresh it here to make
+  // the blocked banner and the disabled composer correct on the first open.
+  refreshBlocked().then(renderThreadHead).catch(() => {});
 
   openLayer('connect-thread', () => closeThread());
   await refreshThread();
@@ -1369,7 +1513,9 @@ function onType() {
 }
 
 async function submit() {
-  if (!state.active) return;
+  // A blocked pair cannot insert messages (the DB trigger raises 'user_blocked'),
+  // so never start a send that is guaranteed to fail.
+  if (!state.active || state.active.blocked) return;
   const text = dom.input.value;
   if (!draftIsSendable({ text, attachment: state.attachment })) return;
 
