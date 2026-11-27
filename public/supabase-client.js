@@ -14,6 +14,7 @@
 
 import { normalizeUsername, suggestUsername } from './username-utils.js';
 import { buildOAuthUrl } from './auth-utils.js';
+import { toRpcDecision } from './connect-model.js';
 
 /** Session storage is deliberately separate from both other storage keys. */
 export const AUTH_STORAGE_KEY = 'loky.ai.next.auth.v1';
@@ -835,7 +836,12 @@ export async function sendFriendRequest(otherUserId, note = null) {
 }
 
 export async function respondFriendRequest(requestId, decision) {
-  return callRpc('respond_friend_request', { request_id: requestId, decision });
+  // respond_friend_request() takes a command ('accept'/'reject'), never the row
+  // status the UI renders: sending 'accepted' made the database raise
+  // invalid_decision and the request was never answered.
+  const rpcDecision = toRpcDecision(decision);
+  if (!rpcDecision) throw new SupabaseError('invalid_decision', 'invalid_decision', 400);
+  return callRpc('respond_friend_request', { request_id: requestId, decision: rpcDecision });
 }
 
 export async function cancelFriendRequest(requestId) {

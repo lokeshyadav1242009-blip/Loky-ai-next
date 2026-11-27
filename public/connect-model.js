@@ -318,3 +318,31 @@ export function threadBlockedNotice(username) {
   const handle = clean ? (clean.startsWith('@') ? clean : `@${clean}`) : 'this user';
   return `You blocked ${handle}. Unblock to send new messages — existing messages stay in your history.`;
 }
+
+/**
+ * Friend-request decisions: the UI speaks in statuses, the database in commands.
+ *
+ * public.respond_friend_request(request_id, decision) accepts ONLY 'accept' or
+ * 'reject' and raises 'invalid_decision' for anything else (see
+ * supabase/migrations/0002_friends_admin.sql). The request rows the UI renders
+ * carry statuses ('accepted' / 'rejected'), so passing a status straight
+ * through made every Accept and Decline fail before the row was touched. This
+ * map is the single place where the two vocabularies are translated.
+ */
+const RPC_DECISION = {
+  accept: 'accept',
+  accepted: 'accept',
+  reject: 'reject',
+  rejected: 'reject',
+  decline: 'reject',
+  declined: 'reject',
+};
+
+/**
+ * The RPC's own decision value ('accept' | 'reject') for any spelling the UI
+ * uses, or null when the value is not a decision at all.
+ */
+export function toRpcDecision(decision) {
+  const key = String(decision == null ? '' : decision).trim().toLowerCase();
+  return Object.prototype.hasOwnProperty.call(RPC_DECISION, key) ? RPC_DECISION[key] : null;
+}
