@@ -94,6 +94,9 @@ import {
   draftIsSendable,
   buildSendPayload,
   friendAction,
+  DELETED_TEXT,
+  canDeleteMessage,
+  deleteMessageErrorText,
 } from './connect-model.js';
 
 import { openLayer, closeLayer } from './back-nav.js';
@@ -1018,6 +1021,10 @@ function closeMenus() {
   for (const btn of document.querySelectorAll('.connect-friend__dots')) {
     btn.setAttribute('aria-expanded', 'false');
   }
+  for (const panel of document.querySelectorAll('.connect-bubble__actions')) panel.hidden = true;
+  for (const btn of document.querySelectorAll('.connect-bubble__dots')) {
+    btn.setAttribute('aria-expanded', 'false');
+  }
 }
 
 /** Confirm step for the two destructive actions; resolves true only on confirm. */
@@ -1443,15 +1450,44 @@ function buildBubble(row) {
   });
   menu.append(replyBtn);
 
-  if (mine && !row.deleted_at) {
-    const del = h('button', 'connect-react-pick connect-react-pick--danger', '🗑');
+  bubble.append(menu);
+
+  // The ⋮ menu is painted only on the viewer's own, still-live messages. It
+  // mirrors public.connect_delete_message(), which re-checks the sender on the
+  // server; hiding the control is convenience, never the security boundary.
+  if (canDeleteMessage(row, state.me && state.me.id)) {
+    const dots = h('button', 'connect-bubble__dots', '⋮');
+    dots.type = 'button';
+    dots.setAttribute('aria-label', 'Message actions');
+    dots.setAttribute('aria-haspopup', 'menu');
+    dots.setAttribute('aria-expanded', 'false');
+
+    const actions = h('div', 'connect-bubble__actions');
+    actions.hidden = true;
+    actions.setAttribute('role', 'menu');
+
+    const del = h('button', 'connect-bubble__action connect-bubble__action--danger', 'Delete Message');
     del.type = 'button';
-    del.setAttribute('aria-label', 'Delete message');
-    del.addEventListener('click', () => removeMessage(row));
-    menu.append(del);
+    del.setAttribute('role', 'menuitem');
+    del.addEventListener('click', (event) => {
+      event.stopPropagation();
+      actions.hidden = true;
+      dots.setAttribute('aria-expanded', 'false');
+      removeMessage(row);
+    });
+
+    actions.append(del);
+    dots.addEventListener('click', (event) => {
+      event.stopPropagation();
+      const willOpen = actions.hidden;
+      closeMenus();
+      actions.hidden = !willOpen;
+      dots.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+    });
+
+    bubble.append(dots, actions);
   }
 
-  bubble.append(menu);
   return bubble;
 }
 
@@ -1501,13 +1537,23 @@ async function toggleReaction(row, emoji, mine) {
 }
 
 async function removeMessage(row) {
+  if (!canDeleteMessage(row, state.me && state.me.id)) return;
+
+  const confirmed = await confirmDialog({
+    title: 'Delete message',
+    body: 'Delete this message for everyone?',
+    confirmLabel: 'Delete',
+    danger: true,
+  });
+  if (!confirmed) return;
+
   try {
     await connectDeleteMessage(row.id);
-    say('Message deleted.', 'ok');
+    say('Message deleted for everyone.', 'ok');
     await refreshThread();
     await refreshThreads();
   } catch (error) {
-    say(error && error.message ? error.message : 'That message could not be deleted.', 'bad');
+    say(deleteMessageErrorText(error), 'bad');
   }
 }
 
