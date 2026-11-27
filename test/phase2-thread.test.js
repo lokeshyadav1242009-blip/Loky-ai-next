@@ -159,14 +159,17 @@ test('the conversation shows a blocked banner and disables the composer', () => 
 });
 
 test('sending is blocked before any upload starts', () => {
-  const submit = connectSource.slice(
-    connectSource.indexOf('async function submit'),
-    connectSource.indexOf('async function submit') + 400
-  );
+  const start = connectSource.indexOf('async function submit');
+  assert.ok(start > 0, 'submit must exist');
+  // Wide enough to reach the media upload branch inside the same function.
+  const submit = connectSource.slice(start, start + 2000);
   assert.match(submit, /if \(!state\.active \|\| state\.active\.blocked\) return;/);
+  const guardAt = submit.indexOf('state.active.blocked');
+  const uploadAt = submit.indexOf('uploadConnectMedia');
+  assert.ok(uploadAt > 0, 'submit still uploads attachments for unblocked chats');
   assert.ok(
-    submit.indexOf('state.active.blocked') < submit.indexOf('uploadConnectMedia'),
-    'the guard must run before media upload'
+    guardAt < uploadAt,
+    'the blocked guard must run before media upload'
   );
 });
 
