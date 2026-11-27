@@ -3,176 +3,153 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>thread header fixture</title>
+<title>thread header under the real app nav</title>
 <!--
-  Development fixture for the LOKY AI conversation header.
+  Faithful reproduction of the REAL ancestor chain for the LOKY AI conversation
+  header. The previous fixture rendered the header markup alone, which is why it
+  passed while the live app showed nothing: it had no fixed .appnav above it and
+  no .connect (position:fixed; inset:0) around it.
 
-  The signed-in app is unreachable without Supabase credentials, so this page
-  loads the REAL public/styles.css + public/upgrade.css and renders the same
-  markup connect.js produces for the header, then measures the result and
-  prints a PASS/FAIL verdict. It is not served by the app (it lives outside
-  public/) and is only used for local visual verification.
+  This page loads the real public/styles.css + public/upgrade.css and builds:
+    .appnav            (position:fixed, z-index:60, height:var(--nav-h))
+    .app > section.connect#connect   (position:fixed, inset:0, z-index:40)
+             > section.connect-thread (position:absolute, inset:0)
+                     > header.connect-thread__top
+
+  It then asserts the header clears the nav and that the controls are the
+  topmost element at their own centre points — the check that computed styles
+  alone cannot make. Prints FIXTURE-RESULT: PASS|FAIL in #report.
 -->
-<link rel="stylesheet" href="../../public/styles.css" />
-<link rel="stylesheet" href="../../public/upgrade.css" />
+<link rel="stylesheet" href="/public/styles.css" />
+<link rel="stylesheet" href="/public/upgrade.css" />
 <style>
-  html, body { margin: 0; height: 100%; background: #030806; font-family: system-ui, -apple-system, sans-serif; }
-  .fixture-shell { position: fixed; inset: 0; display: flex; flex-direction: column; }
-  #report {
-    position: fixed; left: 12px; right: 12px; bottom: 12px; max-height: 46vh; overflow: auto;
-    background: #04120d; border: 1px solid rgba(25, 230, 140, .4); border-radius: 10px;
-    padding: 10px 12px; font: 12px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace;
-    color: #d6fff0; white-space: pre-wrap; z-index: 999; margin: 0;
-  }
-  .ok { color: #19e68c; }
-  .bad { color: #ff8a8a; }
+  body { margin: 0; }
+  #report { position: fixed; right: 8px; bottom: 8px; z-index: 9999;
+            max-width: 46ch; max-height: 60vh; overflow: auto; margin: 0;
+            padding: 8px 10px; border-radius: 8px;
+            background: rgba(0,0,0,0.85); color: #d6fff0;
+            font: 11px/1.45 ui-monospace, monospace; white-space: pre-wrap; }
 </style>
 </head>
 <body>
-<div class="fixture-shell">
-  <section class="connect-thread" id="thread" style="position: relative; inset: auto; flex: 1 1 auto;">
-    <header class="connect-thread__top" id="top">
-      <button class="connect-icon connect-icon--back" id="back" type="button" aria-label="Back to chats">
-        <span class="connect-back__arrow" id="arrow"></span>
-        <span class="connect-back__label" id="label">Back to chats</span>
-      </button>
-      <div class="connect-thread__who">
-        <strong class="connect-thread__name">@sunita</strong>
-        <small class="connect-thread__presence">Offline</small>
-      </div>
-      <div class="connect-friend__more connect-thread__more" id="more">
-        <button class="connect-friend__dots" id="dots" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="Manage @sunita"></button>
-      </div>
-    </header>
-    <div class="connect-thread__scroll">
-      <div class="connect-bubble connect-bubble--in">sample message</div>
-    </div>
+
+<!-- The real app nav: fixed, z-index 60, height var(--nav-h). -->
+<nav class="appnav" id="nav">
+  <div class="appnav__brand">
+    <span class="appnav__mark appnav__mark--sm"></span>
+    <span class="appnav__name">LOKY AI</span>
+  </div>
+  <div class="appnav__switch">
+    <button class="appnav__tab" type="button" aria-selected="false">AI Assistant</button>
+    <button class="appnav__tab" type="button" aria-selected="true">Messages</button>
+  </div>
+</nav>
+
+<div class="app">
+  <section class="connect" id="connect">
+    <section class="connect-thread">
+      <header class="connect-thread__top">
+        <button class="connect-icon connect-icon--back" id="back" type="button" aria-label="Back to chats">
+          <span class="connect-back__arrow" id="arrow">
+            <svg class="connect-icon__svg" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M15 18l-6-6 6-6"></path>
+            </svg>
+          </span>
+          <span class="connect-back__label" id="label">Back to chats</span>
+        </button>
+
+        <div class="connect-thread__who">
+          <strong class="connect-thread__name">@sunita</strong>
+        </div>
+
+        <div class="connect-friend__more connect-thread__more">
+          <button class="connect-friend__dots" id="dots" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="Manage @sunita">
+            <svg class="connect-icon__svg" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="currentColor">
+              <circle cx="12" cy="5.5" r="1.85"></circle>
+              <circle cx="12" cy="12" r="1.85"></circle>
+              <circle cx="12" cy="18.5" r="1.85"></circle>
+            </svg>
+          </button>
+        </div>
+      </header>
+
+      <div class="connect-thread__scroll" id="scroll">sample message</div>
+    </section>
   </section>
 </div>
+
 <pre id="report">measuring…</pre>
+
 <script>
 (function () {
-  'use strict';
-  var NS = 'http://www.w3.org/2000/svg';
+  const out = [];
+  let failed = 0;
+  const pass = (ok, label, detail) => {
+    if (!ok) failed += 1;
+    out.push((ok ? '[PASS] ' : '[FAIL] ') + label + (detail ? ' — ' + detail : ''));
+  };
+  const rect = (el) => {
+    const r = el.getBoundingClientRect();
+    return { top: Math.round(r.top), bottom: Math.round(r.bottom), left: Math.round(r.left), right: Math.round(r.right), w: Math.round(r.width), h: Math.round(r.height) };
+  };
+  const desc = (el) => el ? el.tagName.toLowerCase() + (el.id ? '#' + el.id : '') + (typeof el.className === 'string' && el.className ? '.' + el.className.trim().split(/\s+/).join('.') : '') : 'null';
+  // What actually paints at the control's own centre?
+  const topAt = (el) => {
+    const r = el.getBoundingClientRect();
+    const stack = document.elementsFromPoint(Math.round(r.left + r.width / 2), Math.round(r.top + r.height / 2));
+    return stack;
+  };
+  const ownedBy = (el, stack) => !!(stack[0] && (stack[0] === el || el.contains(stack[0])));
 
-  // Same construction as svgIcon() in public/connect.js.
-  function icon(kind) {
-    var svg = document.createElementNS(NS, 'svg');
-    svg.setAttribute('viewBox', '0 0 24 24');
-    svg.setAttribute('aria-hidden', 'true');
-    svg.setAttribute('focusable', 'false');
-    svg.setAttribute('class', 'connect-icon__svg');
-    if (kind === 'dots') {
-      [5.5, 12, 18.5].forEach(function (cy) {
-        var dot = document.createElementNS(NS, 'circle');
-        dot.setAttribute('cx', '12');
-        dot.setAttribute('cy', String(cy));
-        dot.setAttribute('r', '1.85');
-        dot.setAttribute('fill', 'currentColor');
-        svg.appendChild(dot);
-      });
-      return svg;
-    }
-    var path = document.createElementNS(NS, 'path');
-    path.setAttribute('d', 'M15 5 8 12l7 7');
-    path.setAttribute('fill', 'none');
-    path.setAttribute('stroke', 'currentColor');
-    path.setAttribute('stroke-width', '2.2');
-    path.setAttribute('stroke-linecap', 'round');
-    path.setAttribute('stroke-linejoin', 'round');
-    svg.appendChild(path);
-    return svg;
-  }
+  const nav = document.getElementById('nav');
+  const header = document.querySelector('.connect-thread__top');
+  const back = document.getElementById('back');
+  const dots = document.getElementById('dots');
+  const label = document.getElementById('label');
 
-  var back = document.getElementById('back');
-  var arrow = document.getElementById('arrow');
-  var label = document.getElementById('label');
-  var dots = document.getElementById('dots');
-  arrow.appendChild(icon('arrow'));
-  dots.appendChild(icon('dots'));
-  var arrowSvg = arrow.querySelector('svg');
-  var dotsSvg = dots.querySelector('svg');
+  const navRect = rect(nav);
+  const headRect = rect(header);
 
-  function parse(c) {
-    var m = String(c).match(/rgba?\(([^)]+)\)/);
-    if (!m) return { r: 0, g: 0, b: 0, a: 1 };
-    var p = m[1].split(',').map(function (v) { return parseFloat(v); });
-    return { r: p[0], g: p[1], b: p[2], a: p.length > 3 ? p[3] : 1 };
-  }
-  function over(top, bottom) {
-    var a = top.a + bottom.a * (1 - top.a);
-    if (a === 0) return { r: 0, g: 0, b: 0, a: 0 };
-    return {
-      r: (top.r * top.a + bottom.r * bottom.a * (1 - top.a)) / a,
-      g: (top.g * top.a + bottom.g * bottom.a * (1 - top.a)) / a,
-      b: (top.b * top.a + bottom.b * bottom.a * (1 - top.a)) / a,
-      a: a
-    };
-  }
-  function effectiveBg(el) {
-    var stack = [];
-    for (var n = el; n && n.nodeType === 1; n = n.parentElement) {
-      var c = parse(getComputedStyle(n).backgroundColor);
-      if (c.a > 0) stack.push(c);
-    }
-    var base = { r: 3, g: 8, b: 6, a: 1 };
-    for (var i = stack.length - 1; i >= 0; i--) base = over(stack[i], base);
-    return base;
-  }
-  function lum(c) {
-    function f(v) { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }
-    return 0.2126 * f(c.r) + 0.7152 * f(c.g) + 0.0722 * f(c.b);
-  }
-  function contrast(fg, bg) {
-    var a = lum(fg), b = lum(bg);
-    var hi = Math.max(a, b), lo = Math.min(a, b);
-    return (hi + 0.05) / (lo + 0.05);
-  }
-  function rect(el) {
-    var r = el.getBoundingClientRect();
-    return { x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.width), h: Math.round(r.height) };
-  }
-  function topAt(el) {
-    var r = el.getBoundingClientRect();
-    var hit = document.elementFromPoint(Math.round(r.x + r.width / 2), Math.round(r.y + r.height / 2));
-    return hit && (hit === el || el.contains(hit) || hit.contains(el)) ? el : hit;
-  }
+  // 1. The header must start at or below the nav's bottom edge.
+  pass(headRect.top >= navRect.bottom - 1, 'header clears the fixed nav',
+    'header.top=' + headRect.top + ' nav.bottom=' + navRect.bottom);
 
-  var checks = [];
-  function check(name, ok, detail) {
-    checks.push({ name: name, ok: !!ok, detail: detail });
-  }
-
-  [['back button', back, 3], ['back arrow svg', arrowSvg, 3], ['back label', label, 4.5], ['dots button', dots, 3], ['dots svg', dotsSvg, 3]]
-    .forEach(function (row) {
-      var name = row[0], el = row[1], min = row[2];
-      var r = rect(el), cs = getComputedStyle(el);
-      var fg = parse(cs.color), bg = effectiveBg(el);
-      var ratio = contrast(fg, bg);
-      var painter = topAt(el);
-      var visible = cs.display !== 'none' && cs.visibility === 'visible' && parseFloat(cs.opacity) >= 0.9;
-      check(name + ': has size', r.w > 0 && r.h > 0, r.w + 'x' + r.h + ' at ' + r.x + ',' + r.y);
-      check(name + ': visible', visible, 'display=' + cs.display + ' visibility=' + cs.visibility + ' opacity=' + cs.opacity);
-      check(name + ': contrast >= ' + min, ratio >= min, ratio.toFixed(2) + ':1');
-      check(name + ': on top', painter === el, painter ? (painter.tagName + '.' + (painter.getAttribute('class') || '')) : 'none');
-    });
-
-  var headerRect = rect(document.getElementById('top'));
-  check('header row inside viewport', headerRect.y >= 0 && headerRect.x >= 0 && headerRect.y + headerRect.h <= window.innerHeight,
-    'y=' + headerRect.y + ' h=' + headerRect.h + ' viewportH=' + window.innerHeight);
-  check('back label readable text', label.textContent.trim() === 'Back to chats', JSON.stringify(label.textContent.trim()));
-  check('arrow svg is vector, not a glyph', arrowSvg && arrowSvg.tagName.toLowerCase() === 'svg' && arrowSvg.querySelector('path') !== null, 'path present');
-  check('dots svg draws 3 circles', dotsSvg && dotsSvg.querySelectorAll('circle').length === 3, (dotsSvg ? dotsSvg.querySelectorAll('circle').length : 0) + ' circles');
-
-  var failed = checks.filter(function (c) { return !c.ok; });
-  var lines = checks.map(function (c) {
-    return (c.ok ? '[PASS] ' : '[FAIL] ') + c.name + ' — ' + c.detail;
+  // 2. Both controls must be inside the viewport.
+  [['back', back], ['dots', dots]].forEach(([name, el]) => {
+    const r = rect(el);
+    pass(r.top >= 0 && r.bottom <= window.innerHeight && r.w > 0 && r.h > 0,
+      name + ' is inside the viewport', name + '=' + r.w + 'x' + r.h + ' at ' + r.left + ',' + r.top);
   });
-  lines.push('');
-  lines.push('FIXTURE-RESULT: ' + (failed.length ? 'FAIL (' + failed.length + ')' : 'PASS'));
-  document.getElementById('report').textContent = lines.join('\n');
-  document.getElementById('report').className = failed.length ? 'bad' : 'ok';
-  document.documentElement.setAttribute('data-fixture-result', failed.length ? 'fail' : 'pass');
+
+  // 3. Nothing may paint over them: the topmost element at each centre point
+  //    must be the control itself (or its child svg/label).
+  [['back', back], ['dots', dots]].forEach(([name, el]) => {
+    const stack = topAt(el);
+    pass(ownedBy(el, stack), name + ' is topmost at its centre',
+      'top=' + desc(stack[0]) + ' stack=' + stack.slice(0, 3).map(desc).join(' > '));
+  });
+
+  // 4. The three dots must be three real, sized circles.
+  const circles = dots.querySelectorAll('svg circle');
+  const c0 = circles[0] ? circles[0].getBoundingClientRect() : null;
+  pass(circles.length === 3 && c0 && c0.width > 0 && c0.height > 0,
+    'dots button holds three visible circles',
+    circles.length + ' circles, first=' + (c0 ? Math.round(c0.width) + 'x' + Math.round(c0.height) : 'none'));
+
+  // 5. The arrow must paint a stroke, not vanish.
+  const arrow = document.querySelector('#arrow svg path');
+  const aStyle = arrow ? getComputedStyle(arrow) : null;
+  pass(!!arrow && aStyle.stroke !== 'none' && aStyle.stroke !== 'rgba(0, 0, 0, 0)',
+    'back arrow draws a visible stroke', aStyle ? 'stroke=' + aStyle.stroke : 'no path');
+
+  // 6. Desktop label must be permanently visible.
+  const lStyle = getComputedStyle(label);
+  const lRect = rect(label);
+  pass(window.innerWidth < 720 || (lStyle.display !== 'none' && lRect.w > 0),
+    'desktop label is visible', 'display=' + lStyle.display + ' width=' + lRect.w);
+
+  document.getElementById('report').textContent =
+    out.join('\n') + '\n\nFIXTURE-RESULT: ' + (failed ? 'FAIL (' + failed + ')' : 'PASS');
 })();
 </script>
 </body>

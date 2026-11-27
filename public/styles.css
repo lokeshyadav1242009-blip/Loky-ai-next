@@ -5204,3 +5204,82 @@ body.auth-locked #messenger {
   background: #19e68c;
   border-color: #19e68c;
 }
+
+/* ---------------------------------------------------------------------------
+   The conversation screen must start BELOW the fixed app nav.
+
+   .connect is `position: fixed; inset: 0; z-index: 40`, so the social screen
+   spans the whole viewport from y=0, and .connect-thread is
+   `position: absolute; inset: 0` inside it. That placed the thread's header row
+   at y=0..65 — exactly the band .appnav covers (`position: fixed; z-index: 60;
+   height: var(--nav-h)` = 54px). The back control (y≈14..50) and the three-dot
+   menu (y≈15..49) sat entirely inside those 54px, so they were laid out,
+   styled, "visible" to computed styles, and painted UNDER the nav on every
+   real screen. That is why they never appeared no matter how they were styled.
+   .messenger and .scrim already offset themselves by var(--nav-h); the thread
+   now does the same, so nothing inside the thread has to move.
+   --------------------------------------------------------------------------- */
+.connect-thread {
+  top: var(--nav-h);
+}
+
+/* Back control: an unmistakable bordered pill, labelled from 720px up. */
+.connect-thread__top .connect-icon--back {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  flex: none;
+  min-height: 36px;
+  min-width: 36px;
+  padding: 4px 11px;
+  border: 1px solid rgba(25, 230, 140, 0.5);
+  border-radius: 12px;
+  background: rgba(10, 30, 24, 0.9);
+  color: #eafff6;
+  font-size: 0.86rem;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.connect-thread__top .connect-icon--back:hover,
+.connect-thread__top .connect-icon--back:focus-visible {
+  background: rgba(16, 185, 129, 0.24);
+  border-color: #34d399;
+}
+
+/* The arrow is stroke-drawn; pin the stroke so it can never inherit a
+   fill-only colour and disappear against the dark header. */
+.connect-back__arrow .connect-icon__svg {
+  stroke: currentColor;
+  stroke-width: 2;
+  fill: none;
+}
+
+@media (min-width: 720px) {
+  .connect-thread__top .connect-back__label {
+    display: inline;
+    white-space: nowrap;
+  }
+}
+
+/* Three-dot menu: bordered emerald button holding three filled circles. */
+.connect-thread__more .connect-friend__dots {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 38px;
+  min-height: 36px;
+  padding: 0;
+  border: 1px solid rgba(25, 230, 140, 0.55);
+  border-radius: 12px;
+  background: rgba(10, 30, 24, 0.9);
+  color: #d6fff0;
+}
+
+.connect-thread__more .connect-friend__dots .connect-icon__svg {
+  width: 20px;
+  height: 20px;
+  fill: currentColor;
+}
