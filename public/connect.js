@@ -1386,7 +1386,7 @@ function buildBubble(row) {
   const bubble = h('div', `connect-bubble connect-bubble--${mine ? 'out' : 'in'}`);
 
   if (row.deleted_at) {
-    bubble.append(h('em', 'connect-bubble__deleted', 'Message deleted'));
+    bubble.append(h('em', 'connect-bubble__deleted', DELETED_TEXT));
   } else {
     if (row.reply_to_id) {
       const reply = h('div', 'connect-bubble__reply');
