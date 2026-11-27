@@ -47,7 +47,7 @@ export function friendStateLabel(status) {
     case 'accepted':
       return 'Friends';
     case 'pending_out':
-      return 'Request pending';
+      return 'Request Sent';
     case 'pending_in':
       return 'Wants to connect';
     case 'self':

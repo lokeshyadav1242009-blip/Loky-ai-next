@@ -4194,6 +4194,50 @@ body.auth-locked #messenger {
   text-align: center;
 }
 
+/* Merged social list: a row is either an accepted friend or a chat contact. */
+.connect-friend__head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.connect-tag {
+  flex: none;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .02em;
+  text-transform: uppercase;
+  line-height: 15px;
+}
+
+.connect-tag--friend {
+  color: #04231a;
+  background: #19e68c;
+}
+
+.connect-tag--chat {
+  color: #bdf7dd;
+  background: rgba(25, 230, 140, .12);
+  border: 1px solid rgba(25, 230, 140, .3);
+}
+
+.connect-pane__sub {
+  margin: -4px 0 8px;
+  font-size: 12px;
+  color: #8fb9aa;
+}
+
+/* The conversation currently open in the thread pane. */
+.connect-chat--active {
+  background: rgba(25, 230, 140, .1);
+  box-shadow: inset 3px 0 0 #19e68c;
+  border-radius: 12px;
+}
+
 .connect-friend__cta {
   flex: none;
   padding: 6px 11px;

@@ -65,6 +65,13 @@ import {
 } from './search-utils.js';
 
 import {
+  buildContacts,
+  contactKindLabel,
+  contactSummary,
+  isFriendContact,
+} from './social-contacts.js';
+
+import {
   CONNECT_TABS,
   REACTIONS,
   normalizeTab,
@@ -311,6 +318,8 @@ function buildChatsPane(pane) {
 
 function buildFriendsPane(pane) {
   pane.append(h('h2', 'connect-pane__title', 'Friends'));
+  dom.friendSummary = h('p', 'connect-pane__sub', 'Friends and chat contacts appear here.');
+  pane.append(dom.friendSummary);
   dom.friendList = h('ul', 'connect-list');
   dom.friendEmpty = h('p', 'connect-empty', 'No friends yet.');
   pane.append(dom.friendList, dom.friendEmpty);
@@ -421,6 +430,15 @@ function buildThread() {
 
 /* -------------------------------- rendering ------------------------------- */
 
+/** Highlights the conversation currently open in the thread pane. */
+function markActiveChat(li) {
+  if (!dom.chatList) return;
+  for (const row of dom.chatList.querySelectorAll('.connect-chat--active')) {
+    row.classList.remove('connect-chat--active');
+  }
+  if (li) li.classList.add('connect-chat--active');
+}
+
 function renderThreads() {
   if (!dom.chatList) return;
   clear(dom.chatList);
@@ -430,8 +448,10 @@ function renderThreads() {
     ? 'No chats match that search.'
     : 'No chats yet. Find someone in Discover and start talking.';
 
+  const activeId = state.active && state.active.id;
   for (const row of rows) {
     const li = h('li', 'connect-chat');
+    if (activeId && row.conversation_id === activeId) li.classList.add('connect-chat--active');
     const btn = h('button', 'connect-chat__btn');
     btn.type = 'button';
     btn.append(avatarNode(row.peer_username, row.peer_username, row.peer_avatar_url, 'md'));
@@ -448,7 +468,10 @@ function renderThreads() {
     if (badge) meta.append(h('span', 'connect-badge', badge));
 
     btn.append(body, meta);
-    btn.addEventListener('click', () => openThread(row));
+    btn.addEventListener('click', () => {
+      markActiveChat(li);
+      openThread(row);
+    });
     li.append(btn);
     dom.chatList.append(li);
   }
@@ -482,25 +505,28 @@ function renderFriends() {
   if (!dom.friendList) return;
   clear(dom.friendList);
 
-  const rows = Array.isArray(state.friendRows) ? state.friendRows : [];
+  // Everybody you can talk to, not just accepted friendships: a chat contact
+  // shows up here too, labelled so the two are never confused.
+  const contacts = buildContacts({
+    friends: state.friendRows,
+    threads: state.threads,
+    meId: state.me && state.me.id,
+  });
   const loading = state.friendsLoading;
   const error = state.friendsError;
-  const empty = !loading && !error && rows.length === 0;
+  const empty = !loading && !error && contacts.length === 0;
 
   // The empty state must never claim "no friends" when the load actually
   // failed: that is what made a failed RPC look like an empty Friends list.
   dom.friendEmpty.hidden = !(loading || Boolean(error) || empty);
 
   if (loading) {
-    dom.friendEmpty.textContent = 'Loading your friends…';
+    dom.friendEmpty.textContent = 'Loading your contacts…';
   } else if (error) {
     dom.friendEmpty.textContent = `${describeFriendError(error)} Your friends could not be loaded.`;
   } else if (empty) {
-    // Chats are conversations; Friends are accepted friend requests. Being able
-    // to message somebody does not make them a friend, so say so plainly
-    // instead of quietly showing an empty list.
     dom.friendEmpty.textContent =
-      'No friends yet. People you can message in Chats are not friends until one of you accepts a friend request — search a username in Discover to send one.';
+      'Nobody here yet. Search a username in Discover to send a friend request, or start a chat and the person will appear here as a chat contact.';
   }
 
   if (error) {
@@ -513,31 +539,67 @@ function renderFriends() {
     dom.friendEmpty.append(document.createElement('br'), retry);
   }
 
-  for (const friend of rows) dom.friendList.append(friendRow(friend));
+  for (const contact of contacts) dom.friendList.append(friendRow(contact));
+  if (dom.friendSummary) {
+    dom.friendSummary.textContent = contacts.length
+      ? contactSummary(contacts)
+      : 'Friends and chat contacts appear here.';
+  }
 
   renderBlocked();
 }
 
-function friendRow(friend) {
+function friendRow(contact) {
   const li = h('li', 'connect-friend');
 
   const btn = h('button', 'connect-friend__btn');
   btn.type = 'button';
-  btn.append(avatarNode(friend.username, friend.username, friend.avatar_seed, 'md'));
+  btn.append(avatarNode(contact.username, contact.username, contact.avatarSeed, 'md'));
+
   const body = h('div', 'connect-friend__body');
-  body.append(h('strong', 'connect-friend__name', friend.display_name || `@${friend.username}`));
-  body.append(h('span', 'connect-friend__meta', `@${friend.username}`));
+  const head = h('div', 'connect-friend__head');
+  head.append(h('strong', 'connect-friend__name', contact.displayName || `@${contact.username}`));
+  head.append(h('span', `connect-tag connect-tag--${contact.kind}`, contactKindLabel(contact.kind)));
+  body.append(head);
+  body.append(
+    h(
+      'span',
+      'connect-friend__meta',
+      isFriendContact(contact) ? `@${contact.username}` : `@${contact.username} · chat only`
+    )
+  );
   btn.append(body, h('span', 'connect-friend__cta', 'Message'));
-  btn.addEventListener('click', () => startChatWith(friend));
+
+  // A friend is messaged through start_conversation; a chat contact opens the
+  // conversation it already has instead of creating a second one.
+  btn.addEventListener('click', () => {
+    if (contact.conversationId) {
+      openThread(
+        contact.threadRow || {
+          conversation_id: contact.conversationId,
+          peer_username: contact.username,
+          peer_display_name: contact.displayName,
+        }
+      );
+      return;
+    }
+    startChatWith({
+      id: contact.userId,
+      username: contact.username,
+      display_name: contact.displayName,
+      avatar_seed: contact.avatarSeed,
+    });
+  });
 
   const wrap = h('div', 'connect-friend__more');
-  const menu = friendMenuModel('friends');
+  // Remove/Block only make sense for an accepted friendship.
+  const menu = isFriendContact(contact) ? friendMenuModel('friends') : { visible: false, items: [] };
   if (menu.visible) {
     const toggle = h('button', 'connect-friend__dots', '⋮');
     toggle.type = 'button';
     toggle.setAttribute('aria-haspopup', 'menu');
     toggle.setAttribute('aria-expanded', 'false');
-    toggle.setAttribute('aria-label', `Manage ${friend.username}`);
+    toggle.setAttribute('aria-label', `Manage ${contact.username}`);
 
     const panel = h('div', 'connect-friend__menu');
     panel.setAttribute('role', 'menu');
@@ -554,8 +616,8 @@ function friendRow(friend) {
       action.addEventListener('click', (event) => {
         event.stopPropagation();
         closeMenus();
-        if (item.id === 'remove') runRemoveFriend(friend, action);
-        else if (item.id === 'block') runBlockUser(friend, action);
+        if (item.id === 'remove') runRemoveFriend(contact.friendRow, action);
+        else if (item.id === 'block') runBlockUser(contact.friendRow, action);
       });
       panel.append(action);
     }
@@ -614,7 +676,7 @@ function renderRequests() {
   for (const req of incoming) {
     dom.reqIncoming.append(requestRow(req, [
       { label: 'Accept', cls: 'connect-btn connect-btn--primary', run: (b) => respond(req, 'accepted', b) },
-      { label: 'Reject', cls: 'connect-btn', run: (b) => respond(req, 'rejected', b) },
+      { label: 'Decline', cls: 'connect-btn', run: (b) => respond(req, 'rejected', b) },
     ]));
   }
 
@@ -635,7 +697,8 @@ function requestRow(req, actions) {
   body.append(avatarNode(req.other_username, req.other_username, req.other_avatar_seed, 'sm'));
   const text = h('div', 'connect-req__text');
   text.append(h('strong', null, req.other_display_name || `@${req.other_username}`));
-  text.append(h('span', 'connect-req__note', req.note || (isIncoming(req) ? 'wants to connect' : 'request pending')));
+  const statusText = isIncoming(req) ? 'wants to connect' : 'Request Sent';
+  text.append(h('span', 'connect-req__note', req.note ? `${statusText} · ${req.note}` : statusText));
   body.append(text);
 
   const wrap = h('div', 'connect-req__actions');

@@ -251,7 +251,7 @@ export function friendAction(status, isSelf) {
     case 'self':
       return { label: 'You', disabled: true, action: 'none' };
     case 'pending_out':
-      return { label: 'Requested', disabled: true, action: 'none' };
+      return { label: 'Request Sent', disabled: true, action: 'none' };
     case 'pending_in':
       return { label: 'Respond', disabled: false, action: 'requests' };
     default:

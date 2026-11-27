@@ -51,7 +51,7 @@ test('friendStateLabel maps every relationship to readable text', () => {
   assert.equal(friendStateLabel('friends'), 'Friends');
   assert.equal(friendStateLabel('friend'), 'Friends');
   assert.equal(friendStateLabel('accepted'), 'Friends');
-  assert.equal(friendStateLabel('pending_out'), 'Request pending');
+  assert.equal(friendStateLabel('pending_out'), 'Request Sent');
   assert.equal(friendStateLabel('pending_in'), 'Wants to connect');
   assert.equal(friendStateLabel('self'), 'You');
   assert.equal(friendStateLabel('none'), '');
