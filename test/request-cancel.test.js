@@ -43,9 +43,9 @@ const connectSource = () => readFileSync(new URL('../public/connect.js', import.
 
 const functionSource = (name) => {
   const source = connectSource();
-  const start = source.indexOf(`async function ${name}(`);
+  // Plain and async declarations both contain `function <name>(`.
+  const start = source.indexOf(`function ${name}(`);
   assert.notEqual(start, -1, `${name}() must exist in public/connect.js`);
-  // Slice to the next top-level function declaration.
   const rest = source.slice(start + 1);
   const nextFn = rest.search(/\n(?:async )?function [A-Za-z0-9_$]+\(/);
   return nextFn === -1 ? rest : rest.slice(0, nextFn);
@@ -145,7 +145,12 @@ test('cancelRequest drops the cancelled row before refreshing from the server', 
   assert.match(source, /await cancelFriendRequest\(req\.request_id\)/, 'must call the real Supabase RPC');
   assert.match(
     source,
-    /state\.requestRows\s*=\s*state\.requestRows\.filter\([^)]*request_id\s*!==\s*req\.request_id/,
+    /state\.requestRows\s*=\s*state\.requestRows\.filter\(/,
+    'the cancelled row must be filtered out of the local list'
+  );
+  assert.match(
+    source,
+    /request_id\s*!==\s*req\.request_id/,
     'the cancelled row must be removed locally: the RPC keeps it with status cancelled'
   );
   assert.match(source, /refreshRequestRows\(\)/, 'server state must still be re-read after cancelling');
