@@ -265,7 +265,7 @@ test('no API key or secret literal is embedded in the frontend', () => {
 test('the frontend still uses only local assets (no CDN)', () => {
   assert.ok(!/https?:\/\/(unpkg|cdn|jsdelivr|cdnjs)/i.test(html));
   assert.match(html, /src="\/app\.js(\?v=[\w.-]+)?"/);
-  assert.match(html, /href="\/styles\.css"/);
+  assert.match(html, /href="\/styles\.css(\?v=[\w.-]+)?"/);
 });
 
 /* ------------------------------- asset paths ------------------------------ */
@@ -273,7 +273,7 @@ test('the frontend still uses only local assets (no CDN)', () => {
 test('the shell loads its assets from root-absolute URLs', () => {
   // A relative "./styles.css" resolves to /admin/styles.css on a nested route,
   // where the SPA fallback answers with HTML: unstyled page, dead scripts.
-  assert.match(html, /href="\/styles\.css"/);
+  assert.match(html, /href="\/styles\.css(\?v=[\w.-]+)?"/);
   assert.match(html, /src="\/app\.js(\?v=[\w.-]+)?"/);
   assert.match(html, /href="\/manifest\.webmanifest"/);
   assert.ok(
