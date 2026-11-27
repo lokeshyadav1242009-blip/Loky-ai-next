@@ -321,7 +321,16 @@ test('every friend row renders the three-dot menu with both actions', () => {
   const row = friendsSliceFunction('friendRow');
   assert.notEqual(row, '', 'friendRow must exist');
   assert.match(row, /friendMenuModel\('friends'\)/);
-  assert.match(row, /connect-friend__dots/);
+  assert.match(row, /dotsButton\(/, 'the row uses the shared dots button');
+  // The dots must be a real SVG shape. U+22EE (⋮) is missing from many system
+  // fonts, where a missing glyph paints nothing while the text still shows up
+  // in the accessibility tree — which made the menu look absent on screen.
+  const dots = friendsSliceFunction('dotsButton');
+  assert.notEqual(dots, '', 'dotsButton must exist');
+  assert.match(dots, /connect-friend__dots/);
+  assert.match(dots, /svgIcon\('dots'\)/);
+  assert.equal(dots.includes('\u22ee'), false, 'the dots must not be a font glyph');
+  assert.match(friendsConnectSrc, /createElementNS/);
   assert.match(row, /item\.id === 'remove'/);
   assert.match(row, /item\.id === 'block'/);
   // The menu only opens the flow; each destructive action confirms before running.
