@@ -310,7 +310,9 @@ test('every friend row renders the three-dot menu with both actions', () => {
   assert.match(row, /connect-friend__dots/);
   assert.match(row, /item\.id === 'remove'/);
   assert.match(row, /item\.id === 'block'/);
-  assert.match(row, /confirmDialog/, 'both actions must confirm first');
+  // The menu only opens the flow; each destructive action confirms before running.
+  assert.match(friendsSliceFunction('runRemoveFriend'), /confirmDialog/, 'remove must confirm first');
+  assert.match(friendsSliceFunction('runBlockUser'), /confirmDialog/, 'block must confirm first');
 });
 
 test('the blocked users section lists blocked people and offers unblock', () => {
