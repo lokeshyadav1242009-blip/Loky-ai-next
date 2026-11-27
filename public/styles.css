@@ -5152,3 +5152,55 @@ body.auth-locked #messenger {
   .connect-back__label { display: inline; }
   .connect-thread__who { flex: 1 1 auto; }
 }
+
+/* ---------------------------------------------------------------------------
+   Header controls render real vector shapes.
+   The conversation header used to draw its controls with the characters
+   U+2190 (←) and U+22EE (⋮). Both are missing from many system fonts, and a
+   missing glyph paints nothing while the text still appears in the
+   accessibility tree, so the controls looked absent even though their boxes
+   were laid out correctly. These rules size the inline SVG that replaced them.
+   --------------------------------------------------------------------------- */
+.connect-icon__svg {
+  width: 18px;
+  height: 18px;
+  display: block;
+  flex: none;
+  pointer-events: none;
+}
+
+.connect-back__arrow {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+}
+
+.connect-back__label {
+  color: #eafff6;
+}
+
+.connect-thread__more .connect-friend__dots {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 34px;
+  padding: 0;
+  color: #d6fff0;
+  background: rgba(25, 230, 140, 0.12);
+  border: 1px solid rgba(25, 230, 140, 0.45);
+}
+
+.connect-thread__more .connect-friend__dots .connect-icon__svg {
+  width: 20px;
+  height: 20px;
+}
+
+.connect-thread__more .connect-friend__dots:hover,
+.connect-thread__more .connect-friend__dots:focus-visible,
+.connect-thread__more .connect-friend__dots[aria-expanded="true"] {
+  color: #05140f;
+  background: #19e68c;
+  border-color: #19e68c;
+}
