@@ -853,8 +853,8 @@ function renderRequests() {
   dom.reqIncomingEmpty.hidden = incoming.length > 0;
   for (const req of incoming) {
     dom.reqIncoming.append(requestRow(req, [
-      { label: 'Accept', cls: 'connect-btn connect-btn--primary', run: (b) => respond(req, 'accepted', b) },
-      { label: 'Decline', cls: 'connect-btn', run: (b) => respond(req, 'rejected', b) },
+      { label: 'Accept', cls: 'connect-btn connect-btn--primary', run: (b) => respond(req, 'accept', b) },
+      { label: 'Decline', cls: 'connect-btn', run: (b) => respond(req, 'reject', b) },
     ]));
   }
 
@@ -1155,14 +1155,32 @@ async function sendRequest(person, button) {
   }
 }
 
+/** Database refusals the user can act on; anything else falls back to the message. */
+const RESPOND_ERROR_TEXT = {
+  invalid_decision: 'That request could not be answered. Reload the page and try again.',
+  request_already_answered: 'That request was already answered.',
+  request_not_found: 'That request no longer exists.',
+  not_your_request: 'Only the person who received this request can answer it.',
+  not_authenticated: 'Sign in to answer friend requests.',
+  user_blocked: 'This request cannot be answered because one of you has blocked the other.',
+};
+
+function respondErrorText(error) {
+  const code = String((error && (error.code || error.message)) || '').trim();
+  return RESPOND_ERROR_TEXT[code] || (error && error.message) || 'That request could not be answered.';
+}
+
 async function respond(req, decision, button) {
   button.disabled = true;
   try {
+    // respondFriendRequest() translates the UI's wording into the RPC's
+    // command values ('accept'/'reject'); the database still decides whether
+    // this user is allowed to answer at all.
     await respondFriendRequest(req.request_id, decision);
-    say(decision === 'accepted' ? 'Friend request accepted.' : 'Friend request rejected.', 'ok');
+    say(decision === 'accept' ? 'Friend request accepted.' : 'Friend request rejected.', 'ok');
     await Promise.all([refreshRequestRows(), refreshFriendRows()]);
   } catch (error) {
-    say(error && error.message ? error.message : 'That request could not be answered.', 'bad');
+    say(respondErrorText(error), 'bad');
   } finally {
     button.disabled = false;
   }
