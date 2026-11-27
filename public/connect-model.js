@@ -194,6 +194,34 @@ export function totalUnread(rows) {
   );
 }
 
+/**
+ * True only while a friend request is still answerable.
+ *
+ * public.my_friend_requests() returns EVERY request involving the user (no
+ * status filter) and cancel_friend_request() marks the row 'cancelled'
+ * instead of deleting it, so status must be checked before rendering.
+ */
+export function isPendingRequest(row) {
+  return Boolean(row) && String(row.status || '').toLowerCase() === 'pending';
+}
+
+/**
+ * Split my_friend_requests() rows into the lists the Requests tab shows.
+ * Accepted, rejected and cancelled rows are excluded so a finished request
+ * can never linger as if it were still waiting.
+ */
+export function splitPendingRequests(rows) {
+  const list = Array.isArray(rows) ? rows : [];
+  const incoming = [];
+  const outgoing = [];
+  for (const row of list) {
+    if (!isPendingRequest(row)) continue;
+    if (row.direction === 'incoming' || row.direction === 'in') incoming.push(row);
+    else if (row.direction === 'outgoing' || row.direction === 'out') outgoing.push(row);
+  }
+  return { incoming, outgoing };
+}
+
 /** Pending incoming request count (drives the Requests badge). */
 export function pendingIncoming(requests) {
   const list = Array.isArray(requests) ? requests : [];

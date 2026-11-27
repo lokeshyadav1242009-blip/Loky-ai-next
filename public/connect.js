@@ -89,6 +89,7 @@ import {
   filterThreads,
   totalUnread,
   pendingIncoming,
+  splitPendingRequests,
   notificationText,
   draftIsSendable,
   buildSendPayload,
@@ -668,8 +669,9 @@ function renderRequests() {
   if (!dom.reqIncoming) return;
   // my_friend_requests() reports 'incoming'/'outgoing'; the short forms are
   // tolerated so a changed payload can never silently empty this tab.
-  const incoming = state.requestRows.filter(isIncoming);
-  const outgoing = state.requestRows.filter(isOutgoing);
+  // It also returns every status, so only still-pending rows may be listed:
+  // accepted/declined/cancelled requests would otherwise stay on screen.
+  const { incoming, outgoing } = splitPendingRequests(state.requestRows);
 
   clear(dom.reqIncoming);
   dom.reqIncomingEmpty.hidden = incoming.length > 0;
@@ -993,10 +995,26 @@ async function cancelRequest(req, button) {
   button.disabled = true;
   try {
     await cancelFriendRequest(req.request_id);
+    // cancel_friend_request() keeps the row with status 'cancelled', and
+    // refreshRequestRows() re-reads it, so remove it here as well. Without
+    // this the same person reappears in Sent right after a successful cancel.
+    state.requestRows = state.requestRows.filter((row) => row && row.request_id !== req.request_id);
+    // Discover must offer 'Add friend' again, otherwise the button stays on
+    // 'Request Sent' and the request can never be re-sent from this screen.
+    for (const person of state.results) {
+      if (person && person.id === req.other_id && person.friend_state === 'pending_out') {
+        person.friend_state = 'none';
+      }
+    }
+    renderRequests();
+    renderResults();
     say('Friend request cancelled.', 'ok');
     await refreshRequestRows();
+    renderResults();
   } catch (error) {
     say(error && error.message ? error.message : 'That request could not be cancelled.', 'bad');
+    // Restore the real server state instead of leaving the list half-updated.
+    await refreshRequestRows();
   } finally {
     button.disabled = false;
   }
