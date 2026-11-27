@@ -5100,3 +5100,55 @@ body.auth-locked #messenger {
   opacity: .5;
   cursor: not-allowed;
 }
+
+/* ------------------------------------------------------------------------- */
+/* Phase 2 hardening — the conversation header controls must be impossible   */
+/* to miss. The ⋮ deliberately reuses .connect-friend__dots, which is         */
+/* transparent and muted for the Friends rows; inherited into the header that */
+/* made the menu read as "not there at all". The header also needs its own    */
+/* stacking context so the open dropdown always paints over the scroller.     */
+/* ------------------------------------------------------------------------- */
+
+.connect-thread__top {
+  position: relative;
+  z-index: 30;
+}
+
+/* flex: none keeps both controls from being squeezed out by a long name. */
+.connect-thread__top .connect-icon--back { flex: none; }
+
+.connect-thread__more {
+  flex: none;
+  margin-left: auto;
+}
+
+.connect-thread__more .connect-friend__dots {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 36px;
+  min-height: 34px;
+  padding: 4px 8px;
+  border: 1px solid rgba(25, 230, 140, 0.28);
+  border-radius: 12px;
+  background: rgba(10, 30, 24, 0.72);
+  color: #b8ffe0;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.connect-thread__more .connect-friend__dots:hover,
+.connect-thread__more .connect-friend__dots:focus-visible,
+.connect-thread__more .connect-friend__dots[aria-expanded='true'] {
+  background: rgba(16, 185, 129, 0.2);
+  border-color: rgba(52, 211, 153, 0.5);
+  color: #eafff6;
+}
+
+.connect-thread__more .connect-friend__menu { z-index: 60; }
+
+/* Desktop/tablet: the labelled back control and the peer menu share the row. */
+@media (min-width: 720px) {
+  .connect-back__label { display: inline; }
+  .connect-thread__who { flex: 1 1 auto; }
+}
